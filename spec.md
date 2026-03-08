@@ -60,10 +60,14 @@ key-rest-daemon は REST API を呼び出すためのデーモンです。APP KE
   - 起動時に秘密鍵を入力するように求められます。入力された秘密鍵はメモリに保存されます。ファイルには保存されません。
 - `./key-rest status` : key-rest-daemon の状態を確認します。
 - `./key-rest stop` : key-rest-daemon を停止します。
-- `./key-rest add <key-uri> <url-prefix>` : key-rest-daemon にキーを追加します。key は key-uri で指定され、対応する URL プレフィックスは url-prefix で指定されます。
+- `./key-rest add [options] <key-uri> <url-prefix>` : key-rest-daemon にキーを追加します。key は key-uri で指定され、対応する URL プレフィックスは url-prefix で指定されます。
   - key-rest-daemon が running 状態でないときは、秘密鍵を入力するように求められます。
   - key-rest-daemon が running 状態のときは、秘密鍵は入力する必要はありません。
   - そのあとに、キーの値を入力するように求められます。入力されたキーは暗号化されてファイルに保存されます。
+  - オプション:
+    - `--allow-url` : URL 内での置換を許可します (クエリパラメータ認証用: Gemini, Trello 等)
+    - `--allow-body` : リクエストボディ内での置換を許可します (ボディ認証用: Tavily 等)
+    - デフォルトでは headers 内のみ置換が許可されます
 - `./key-rest remove <key>` : key-rest-daemon からキーを削除します。
 - `./key-rest list` : key-rest-daemon に登録されているキーの一覧を表示します。
   - 出力例
@@ -114,6 +118,8 @@ stateDiagram-v2
     {
       "uri": "user1/brave/api-key",
       "url_prefix": "https://api.search.brave.com/",
+      "allow_url": false,
+      "allow_body": false,
       "encrypted_value": "<暗号化されたキー値(base64)>"
     }
   ]
@@ -240,6 +246,10 @@ Authorization: Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest:/
 2. 各マッチに含まれる key-rest:// URI について:
    a. key-uri が登録されていることを確認する
    b. リクエスト先 URL が key-uri に紐づいた `url_prefix` と前方一致することを確認する (セキュリティ制約)
+   c. マッチが含まれるフィールドがそのキーで許可されていることを確認する (フィールド制限)
+      - headers: 常に許可
+      - url: `allow_url` が true の場合のみ許可
+      - body: `allow_body` が true の場合のみ許可
 3. key-rest:// URI を実際のキー値に置換する
 4. 変換関数がある場合は適用する (例: `base64(...)` → 引数を連結して base64 エンコード)
 5. マッチ箇所全体 (Enclosed の場合は `{{ }}` を含む) を最終結果で置換する
