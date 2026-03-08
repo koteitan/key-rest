@@ -1,4 +1,13 @@
-[English](CLAUDE.md) | [日本語](CLAUDE-ja.md)
+# Language Rules
+- I talk to you in English.
+- You talk to me in Japanese.
+- commit messages, code comments, messages to the user shall be in English.
+- The documentations on *.md files shall be in English.
+- The documentations on *-ja.md files shall be in Japanese.
+- *.md and *-ja.md shall be linked each other with the following format:
+```markdown
+[English](spec.md) | [Japanese](spec-ja.md)
+```
 
 # Security Expert Mode
 
