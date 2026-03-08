@@ -175,7 +175,7 @@ key-rest クライアントライブラリと key-rest-daemon の間は Unix ド
 
 ### key-rest:// URI の置換ルール
 
-使用例は [example.md](example.md) (2963592) を参照。
+使用例は [examples/](examples/README.md) (2963592) を参照。
 
 #### key-rest URI の形式
 
@@ -363,4 +363,4 @@ curl のラッパーコマンドです。curl と同じ引数を受け取り、k
 
 # REST API の使用例
 
-[example.md](example.md) を参照してください。
+[examples/](examples/README.md) を参照してください。
