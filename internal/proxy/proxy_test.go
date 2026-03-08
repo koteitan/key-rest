@@ -1,0 +1,218 @@
+package proxy
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/koteitan/key-rest/internal/keystore"
+)
+
+func setupProxy(t *testing.T) (*Proxy, *keystore.Store) {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := keystore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pass := []byte("test-pass")
+	store.Add("user1/test/api-key", "https://", false, false, []byte("real-api-key"), pass)
+	store.Add("user1/test/url-key", "https://", true, false, []byte("url-key-val"), pass)
+	store.Add("user1/test/body-key", "https://", false, true, []byte("body-key-val"), pass)
+	store.DecryptAll(pass)
+	return New(store), store
+}
+
+func TestHandleBasicRequest(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer real-api-key" {
+			t.Errorf("unexpected auth header: %s", auth)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer ts.Close()
+
+	p, store := setupProxy(t)
+	// Re-add with matching URL prefix
+	pass := []byte("test-pass")
+	store.Add("user1/ts/key", ts.URL+"/", false, false, []byte("real-api-key"), pass)
+	store.DecryptAll(pass)
+	p = New(store)
+
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    ts.URL + "/data",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/ts/key",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+	if resp.Status != 200 {
+		t.Fatalf("expected 200, got %d", resp.Status)
+	}
+
+	var body map[string]interface{}
+	json.Unmarshal([]byte(resp.Body), &body)
+	if body["ok"] != true {
+		t.Fatalf("unexpected body: %s", resp.Body)
+	}
+}
+
+func TestHandleKeyNotFound(t *testing.T) {
+	p, _ := setupProxy(t)
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "https://example.com/",
+		Headers: map[string]string{
+			"Authorization": "key-rest://nonexistent/key",
+		},
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected error")
+	}
+	if resp.Error.Code != "KEY_NOT_FOUND" {
+		t.Fatalf("expected KEY_NOT_FOUND, got %s", resp.Error.Code)
+	}
+}
+
+func TestHandleFieldRestrictionURL(t *testing.T) {
+	p, _ := setupProxy(t)
+
+	// user1/test/api-key has allow_url=false, so using it in URL should fail
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "https://example.com/?key=key-rest://user1/test/api-key",
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected field restriction error")
+	}
+	if resp.Error.Code != "FIELD_NOT_ALLOWED" {
+		t.Fatalf("expected FIELD_NOT_ALLOWED, got %s", resp.Error.Code)
+	}
+}
+
+func TestHandleFieldRestrictionBody(t *testing.T) {
+	p, _ := setupProxy(t)
+
+	body := `{"api_key": "key-rest://user1/test/api-key"}`
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "POST",
+		URL:    "https://example.com/",
+		Body:   &body,
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected field restriction error")
+	}
+	if resp.Error.Code != "FIELD_NOT_ALLOWED" {
+		t.Fatalf("expected FIELD_NOT_ALLOWED, got %s", resp.Error.Code)
+	}
+}
+
+func TestHandleAllowURL(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("key") != "url-key-val" {
+			t.Errorf("unexpected query param: %s", r.URL.Query().Get("key"))
+		}
+		w.WriteHeader(200)
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/url-key", ts.URL+"/", true, false, []byte("url-key-val"), pass)
+	store.DecryptAll(pass)
+	p := New(store)
+
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    ts.URL + "/?key=key-rest://user1/url-key",
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+}
+
+func TestHandleAllowBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/body-key", ts.URL+"/", false, true, []byte("body-key-val"), pass)
+	store.DecryptAll(pass)
+	p := New(store)
+
+	body := `{"api_key": "key-rest://user1/body-key"}`
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "POST",
+		URL:    ts.URL + "/",
+		Body:   &body,
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+}
+
+func TestHandleURLPrefixMismatch(t *testing.T) {
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/brave/key", "https://api.search.brave.com/", false, false, []byte("brave-key"), pass)
+	store.DecryptAll(pass)
+	p := New(store)
+
+	// Request URL does not match the key's url_prefix
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "https://evil.com/steal",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/brave/key",
+		},
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected URL_PREFIX_MISMATCH error")
+	}
+	if resp.Error.Code != "URL_PREFIX_MISMATCH" {
+		t.Fatalf("expected URL_PREFIX_MISMATCH, got %s", resp.Error.Code)
+	}
+}
+
+func TestHandleInvalidType(t *testing.T) {
+	p, _ := setupProxy(t)
+	resp := p.Handle(&Request{
+		Type:   "websocket",
+		Method: "GET",
+		URL:    "https://example.com/",
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected error")
+	}
+	if resp.Error.Code != "INVALID_REQUEST" {
+		t.Fatalf("expected INVALID_REQUEST, got %s", resp.Error.Code)
+	}
+}
