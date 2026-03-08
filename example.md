@@ -2,15 +2,15 @@
 
 ## 認証パターン一覧
 
-| パターン | サービス例 | 注入先 |
-|----------|-----------|--------|
-| `Authorization: Bearer <key>` | OpenAI, GitHub, Slack, LINE | ヘッダー値 |
-| `Authorization: Bot <key>` | Discord | ヘッダー値 |
-| `Authorization: Basic {{ base64(...) }}` | Atlassian | enclosed + 変換関数 |
-| `?key=<key>` | Gemini | URL クエリパラメータ |
-| `x-api-key: <key>` | Anthropic | カスタムヘッダー |
-| `X-Subscription-Token: <key>` | Brave Search | カスタムヘッダー |
-| URL パス埋め込み | Telegram | URL パス |
+| パターン | サービス例 | 注入先 | 終端文字 |
+|----------|-----------|--------|----------|
+| `Authorization: Bearer <key>` | OpenAI, Mistral, Groq, xAI, DeepSeek, Perplexity, OpenRouter, GitHub, Slack, LINE, Matrix | ヘッダー値 | 文字列末尾 |
+| `Authorization: Bot <key>` | Discord | ヘッダー値 | 文字列末尾 |
+| `Authorization: Basic <user>:<pass>` | Atlassian | ヘッダー値 | `:` (有効文字外) |
+| `?key=<key>` | Gemini | URL クエリパラメータ | `&` or 文字列末尾 |
+| `x-api-key: <key>` | Anthropic | カスタムヘッダー | 文字列末尾 |
+| `X-Subscription-Token: <key>` | Brave Search | カスタムヘッダー | 文字列末尾 |
+| `/bot<token>/<method>` | Telegram | URL パス | `/` (有効文字内→enclosed 必要) |
 
 ---
 
@@ -253,6 +253,242 @@ response = requests.post(
 ).json()
 ```
 
+## Mistral API
+
+### セットアップ
+```bash
+./key-rest add user1/mistral/api-key https://api.mistral.ai/
+# → キーの値を入力してください: (Mistral API key を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const response = await fetch(
+  'https://api.mistral.ai/v1/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/mistral/api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'mistral-large-latest',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"model":"mistral-large-latest","messages":[{"role":"user","content":"Hello!"}]}`)
+req, _ := keyrest.NewRequest("POST", "https://api.mistral.ai/v1/chat/completions", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/mistral/api-key")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+response = requests.post(
+    'https://api.mistral.ai/v1/chat/completions',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/mistral/api-key',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'model': 'mistral-large-latest',
+        'messages': [{'role': 'user', 'content': 'Hello!'}]
+    }
+).json()
+```
+
+## Groq API
+
+> **Note:** Groq は OpenAI 互換 API を提供しています。
+
+### セットアップ
+```bash
+./key-rest add user1/groq/api-key https://api.groq.com/
+# → キーの値を入力してください: (Groq API key を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const response = await fetch(
+  'https://api.groq.com/openai/v1/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/groq/api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"model":"llama-3.3-70b-versatile","messages":[{"role":"user","content":"Hello!"}]}`)
+req, _ := keyrest.NewRequest("POST", "https://api.groq.com/openai/v1/chat/completions", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/groq/api-key")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+response = requests.post(
+    'https://api.groq.com/openai/v1/chat/completions',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/groq/api-key',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'model': 'llama-3.3-70b-versatile',
+        'messages': [{'role': 'user', 'content': 'Hello!'}]
+    }
+).json()
+```
+
+## xAI (Grok) API
+
+### セットアップ
+```bash
+./key-rest add user1/xai/api-key https://api.x.ai/
+# → キーの値を入力してください: (xAI API key を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const response = await fetch(
+  'https://api.x.ai/v1/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/xai/api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'grok-3',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"model":"grok-3","messages":[{"role":"user","content":"Hello!"}]}`)
+req, _ := keyrest.NewRequest("POST", "https://api.x.ai/v1/chat/completions", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/xai/api-key")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+response = requests.post(
+    'https://api.x.ai/v1/chat/completions',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/xai/api-key',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'model': 'grok-3',
+        'messages': [{'role': 'user', 'content': 'Hello!'}]
+    }
+).json()
+```
+
+## DeepSeek API
+
+> **Note:** DeepSeek は OpenAI 互換 API を提供しています。
+
+### セットアップ
+```bash
+./key-rest add user1/deepseek/api-key https://api.deepseek.com/
+# → キーの値を入力してください: (DeepSeek API key を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const response = await fetch(
+  'https://api.deepseek.com/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/deepseek/api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"model":"deepseek-chat","messages":[{"role":"user","content":"Hello!"}]}`)
+req, _ := keyrest.NewRequest("POST", "https://api.deepseek.com/chat/completions", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/deepseek/api-key")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+response = requests.post(
+    'https://api.deepseek.com/chat/completions',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/deepseek/api-key',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'model': 'deepseek-chat',
+        'messages': [{'role': 'user', 'content': 'Hello!'}]
+    }
+).json()
+```
+
 ---
 
 # 検索
@@ -303,6 +539,64 @@ results = requests.get(
     headers={
         'X-Subscription-Token': 'key-rest://user1/brave/api-key',
         'Accept': 'application/json'
+    }
+).json()
+```
+
+## Perplexity API
+
+### セットアップ
+```bash
+./key-rest add user1/perplexity/api-key https://api.perplexity.ai/
+# → キーの値を入力してください: (Perplexity API key を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const response = await fetch(
+  'https://api.perplexity.ai/chat/completions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/perplexity/api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'sonar',
+      messages: [{ role: 'user', content: 'What is key-rest?' }]
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"model":"sonar","messages":[{"role":"user","content":"What is key-rest?"}]}`)
+req, _ := keyrest.NewRequest("POST", "https://api.perplexity.ai/chat/completions", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/perplexity/api-key")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+response = requests.post(
+    'https://api.perplexity.ai/chat/completions',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/perplexity/api-key',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'model': 'sonar',
+        'messages': [{'role': 'user', 'content': 'What is key-rest?'}]
     }
 ).json()
 ```
@@ -482,6 +776,125 @@ result = requests.post(
     json={
         'chat_id': 123456789,
         'text': 'Hello from key-rest!'
+    }
+).json()
+```
+
+## LINE Messaging API
+
+### セットアップ
+```bash
+./key-rest add user1/line/channel-access-token https://api.line.me/
+# → キーの値を入力してください: (LINE Channel Access Token を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const result = await fetch(
+  'https://api.line.me/v2/bot/message/push',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/line/channel-access-token',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      to: 'U1234567890abcdef',
+      messages: [{ type: 'text', text: 'Hello from key-rest!' }]
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"to":"U1234567890abcdef","messages":[{"type":"text","text":"Hello from key-rest!"}]}`)
+req, _ := keyrest.NewRequest("POST", "https://api.line.me/v2/bot/message/push", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/line/channel-access-token")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+result = requests.post(
+    'https://api.line.me/v2/bot/message/push',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/line/channel-access-token',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'to': 'U1234567890abcdef',
+        'messages': [{'type': 'text', 'text': 'Hello from key-rest!'}]
+    }
+).json()
+```
+
+## Matrix API
+
+> **Note:** Matrix はホームサーバーの URL がインスタンスごとに異なります。
+
+### セットアップ
+```bash
+./key-rest add user1/matrix/access-token https://matrix.example.org/
+# → キーの値を入力してください: (Matrix Access Token を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const result = await fetch(
+  'https://matrix.example.org/_matrix/client/v3/rooms/!roomid:example.org/send/m.room.message',
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': 'Bearer key-rest://user1/matrix/access-token',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      msgtype: 'm.text',
+      body: 'Hello from key-rest!'
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := strings.NewReader(`{"msgtype":"m.text","body":"Hello from key-rest!"}`)
+req, _ := keyrest.NewRequest("PUT",
+    "https://matrix.example.org/_matrix/client/v3/rooms/!roomid:example.org/send/m.room.message", body)
+req.Header.Set("Authorization", "Bearer key-rest://user1/matrix/access-token")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+result = requests.put(
+    'https://matrix.example.org/_matrix/client/v3/rooms/!roomid:example.org/send/m.room.message',
+    headers={
+        'Authorization': 'Bearer key-rest://user1/matrix/access-token',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'msgtype': 'm.text',
+        'body': 'Hello from key-rest!'
     }
 ).json()
 ```
