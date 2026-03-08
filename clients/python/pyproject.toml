@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "key-rest"
+version = "0.1.0"
+description = "key-rest client library for Python"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+httpx = ["httpx>=0.24"]
