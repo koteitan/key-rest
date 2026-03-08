@@ -1,4 +1,4 @@
-[English](sentry.md) | [日本語](sentry-ja.md)
+[English](sentry.md) | [Japanese](sentry-ja.md)
 
 ## Sentry API
 

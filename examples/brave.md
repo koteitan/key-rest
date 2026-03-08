@@ -1,4 +1,4 @@
-[English](brave.md) | [日本語](brave-ja.md)
+[English](brave.md) | [Japanese](brave-ja.md)
 
 ## Brave Search API
 

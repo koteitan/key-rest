@@ -1,4 +1,4 @@
-[English](google-search.md) | [日本語](google-search-ja.md)
+[English](google-search.md) | [Japanese](google-search-ja.md)
 
 ## Google Custom Search API
 

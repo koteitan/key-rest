@@ -1,4 +1,4 @@
-[English](slack.md) | [日本語](slack-ja.md)
+[English](slack.md) | [Japanese](slack-ja.md)
 
 ## Slack API
 

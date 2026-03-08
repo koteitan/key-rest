@@ -1,4 +1,4 @@
-[English](plan.md) | [日本語](plan-ja.md)
+[English](plan.md) | [Japanese](plan-ja.md)
 
 # Implementation Plan
 

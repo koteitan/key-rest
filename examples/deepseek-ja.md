@@ -1,4 +1,4 @@
-[English](deepseek.md) | [日本語](deepseek-ja.md)
+[English](deepseek.md) | [Japanese](deepseek-ja.md)
 
 ## DeepSeek API
 

@@ -1,4 +1,4 @@
-[English](perplexity.md) | [日本語](perplexity-ja.md)
+[English](perplexity.md) | [Japanese](perplexity-ja.md)
 
 ## Perplexity API
 

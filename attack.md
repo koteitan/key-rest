@@ -1,4 +1,4 @@
-[English](attack.md) | [日本語](attack-ja.md)
+[English](attack.md) | [Japanese](attack-ja.md)
 
 # Attack Vector Analysis
 

@@ -1,4 +1,4 @@
-[English](linear.md) | [日本語](linear-ja.md)
+[English](linear.md) | [Japanese](linear-ja.md)
 
 ## Linear API
 

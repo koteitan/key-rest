@@ -1,4 +1,4 @@
-[English](openai.md) | [日本語](openai-ja.md)
+[English](openai.md) | [Japanese](openai-ja.md)
 
 ## OpenAI API
 

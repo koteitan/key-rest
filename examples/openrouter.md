@@ -1,4 +1,4 @@
-[English](openrouter.md) | [日本語](openrouter-ja.md)
+[English](openrouter.md) | [Japanese](openrouter-ja.md)
 
 ## OpenRouter API
 

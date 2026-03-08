@@ -1,4 +1,4 @@
-[English](tavily.md) | [日本語](tavily-ja.md)
+[English](tavily.md) | [Japanese](tavily-ja.md)
 
 ## Tavily Search API
 

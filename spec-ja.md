@@ -1,4 +1,4 @@
-[English](spec.md) | [日本語](spec-ja.md)
+[English](spec.md) | [Japanese](spec-ja.md)
 
 # key-rest
 agent に APP key などを見せずに、REST API に App key などの credential を埋め込んで呼び出すためのプロキシです。

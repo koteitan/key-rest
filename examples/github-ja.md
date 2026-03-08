@@ -1,4 +1,4 @@
-[English](github.md) | [日本語](github-ja.md)
+[English](github.md) | [Japanese](github-ja.md)
 
 ## GitHub API
 

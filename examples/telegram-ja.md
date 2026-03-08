@@ -1,4 +1,4 @@
-[English](telegram.md) | [日本語](telegram-ja.md)
+[English](telegram.md) | [Japanese](telegram-ja.md)
 
 ## Telegram Bot API
 

@@ -1,4 +1,4 @@
-[English](exa.md) | [日本語](exa-ja.md)
+[English](exa.md) | [Japanese](exa-ja.md)
 
 ## Exa Search API
 

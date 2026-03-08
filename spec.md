@@ -1,4 +1,4 @@
-[English](spec.md) | [日本語](spec-ja.md)
+[English](spec.md) | [Japanese](spec-ja.md)
 
 # key-rest
 A proxy that embeds credentials such as APP keys into REST API calls without exposing them to the agent.

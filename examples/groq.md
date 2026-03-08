@@ -1,4 +1,4 @@
-[English](groq.md) | [日本語](groq-ja.md)
+[English](groq.md) | [Japanese](groq-ja.md)
 
 ## Groq API
 

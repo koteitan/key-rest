@@ -1,4 +1,4 @@
-[English](matrix.md) | [日本語](matrix-ja.md)
+[English](matrix.md) | [Japanese](matrix-ja.md)
 
 ## Matrix API
 

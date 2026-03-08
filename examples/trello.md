@@ -1,4 +1,4 @@
-[English](trello.md) | [日本語](trello-ja.md)
+[English](trello.md) | [Japanese](trello-ja.md)
 
 ## Trello API
 

@@ -1,4 +1,4 @@
-[English](atlassian.md) | [日本語](atlassian-ja.md)
+[English](atlassian.md) | [Japanese](atlassian-ja.md)
 
 ## Atlassian API
 

@@ -1,4 +1,4 @@
-[English](gemini.md) | [日本語](gemini-ja.md)
+[English](gemini.md) | [Japanese](gemini-ja.md)
 
 ## Gemini API
 
