@@ -1,9 +1,11 @@
+[English](xai.md) | [日本語](xai-ja.md)
+
 ## xAI (Grok) API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/xai/api-key https://api.x.ai/
-# → キーの値を入力してください: (xAI API key を入力)
+# → Enter the key value: (enter xAI API key)
 ```
 
 ### Node.js

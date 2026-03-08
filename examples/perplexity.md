@@ -1,9 +1,11 @@
+[English](perplexity.md) | [日本語](perplexity-ja.md)
+
 ## Perplexity API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/perplexity/api-key https://api.perplexity.ai/
-# → キーの値を入力してください: (Perplexity API key を入力)
+# → Enter the key value: (enter Perplexity API key)
 ```
 
 ### Node.js

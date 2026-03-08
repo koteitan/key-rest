@@ -1,13 +1,15 @@
+[English](trello.md) | [日本語](trello-ja.md)
+
 ## Trello API
 
-> **Note:** Trello は API キーとトークンの2つを URL クエリパラメータとして送信します。
+> **Note:** Trello sends both an API key and a token as URL query parameters.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/trello/api-key https://api.trello.com/
-# → キーの値を入力してください: (Trello API Key を入力)
+# → Enter the key value: (enter Trello API Key)
 ./key-rest add user1/trello/token https://api.trello.com/
-# → キーの値を入力してください: (Trello Token を入力)
+# → Enter the key value: (enter Trello Token)
 ```
 
 ### Node.js

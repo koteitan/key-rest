@@ -1,9 +1,11 @@
+[English](sentry.md) | [日本語](sentry-ja.md)
+
 ## Sentry API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/sentry/auth-token https://sentry.io/
-# → キーの値を入力してください: (Sentry Auth Token を入力)
+# → Enter the key value: (enter Sentry Auth Token)
 ```
 
 ### Node.js

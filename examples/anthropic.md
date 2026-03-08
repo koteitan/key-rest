@@ -1,11 +1,13 @@
+[English](anthropic.md) | [日本語](anthropic-ja.md)
+
 ## Anthropic API
 
-> **Note:** Anthropic は `Authorization: Bearer` ではなく `x-api-key` カスタムヘッダーを使用します。
+> **Note:** Anthropic uses the `x-api-key` custom header instead of `Authorization: Bearer`.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/anthropic/api-key https://api.anthropic.com/
-# → キーの値を入力してください: (Anthropic API key を入力)
+# → Enter the key value: (enter Anthropic API key)
 ```
 
 ### Node.js

@@ -1,9 +1,11 @@
+[English](github.md) | [日本語](github-ja.md)
+
 ## GitHub API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/github/token https://api.github.com/
-# → キーの値を入力してください: (GitHub Personal Access Token を入力)
+# → Enter the key value: (enter GitHub Personal Access Token)
 ```
 
 ### Node.js

@@ -1,11 +1,13 @@
+[English](discord.md) | [日本語](discord-ja.md)
+
 ## Discord API
 
-> **Note:** Discord は `Bearer` ではなく `Bot` プレフィックスを使用します。
+> **Note:** Discord uses the `Bot` prefix instead of `Bearer`.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/discord/bot-token https://discord.com/
-# → キーの値を入力してください: (Discord Bot Token を入力)
+# → Enter the key value: (enter Discord Bot Token)
 ```
 
 ### Node.js
@@ -13,7 +15,7 @@
 import { createFetch } from 'key-rest';
 const fetch = createFetch();
 
-// チャンネルにメッセージを送信
+// Send a message to a channel
 const result = await fetch(
   'https://discord.com/api/v10/channels/123456789/messages',
   {

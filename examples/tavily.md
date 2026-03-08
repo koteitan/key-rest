@@ -1,11 +1,13 @@
+[English](tavily.md) | [日本語](tavily-ja.md)
+
 ## Tavily Search API
 
-> **Note:** Tavily は API キーをリクエストボディの JSON フィールドとして送信します。key-rest:// URI はボディ内でも置換されます。
+> **Note:** Tavily sends the API key as a JSON field in the request body. The key-rest:// URI is also replaced within the body.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/tavily/api-key https://api.tavily.com/
-# → キーの値を入力してください: (Tavily API Key を入力)
+# → Enter the key value: (enter Tavily API Key)
 ```
 
 ### Node.js

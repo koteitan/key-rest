@@ -1,9 +1,11 @@
+[English](gitlab.md) | [日本語](gitlab-ja.md)
+
 ## GitLab API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/gitlab/token https://gitlab.com/
-# → キーの値を入力してください: (GitLab Personal Access Token を入力)
+# → Enter the key value: (enter GitLab Personal Access Token)
 ```
 
 ### Node.js

@@ -1,11 +1,13 @@
+[English](matrix.md) | [日本語](matrix-ja.md)
+
 ## Matrix API
 
-> **Note:** Matrix はホームサーバーの URL がインスタンスごとに異なります。
+> **Note:** Matrix homeserver URLs vary per instance.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/matrix/access-token https://matrix.example.org/
-# → キーの値を入力してください: (Matrix Access Token を入力)
+# → Enter the key value: (enter Matrix Access Token)
 ```
 
 ### Node.js

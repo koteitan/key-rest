@@ -1,11 +1,13 @@
+[English](telegram.md) | [日本語](telegram-ja.md)
+
 ## Telegram Bot API
 
-> **Note:** Telegram はトークンを URL パスに埋め込みます。URI の後に `/sendMessage` が続くため enclosed 形式 `{{ }}` が必要です。
+> **Note:** Telegram embeds the token in the URL path. Since `/sendMessage` follows the URI, the enclosed form `{{ }}` is required.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/telegram/bot-token https://api.telegram.org/
-# → キーの値を入力してください: (Telegram Bot Token を入力)
+# → Enter the key value: (enter Telegram Bot Token)
 ```
 
 ### Node.js
@@ -13,7 +15,7 @@
 import { createFetch } from 'key-rest';
 const fetch = createFetch();
 
-// メッセージを送信
+// Send a message
 const result = await fetch(
   'https://api.telegram.org/bot{{ key-rest://user1/telegram/bot-token }}/sendMessage',
   {

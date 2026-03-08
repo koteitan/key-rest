@@ -1,11 +1,13 @@
+[English](gemini.md) | [日本語](gemini-ja.md)
+
 ## Gemini API
 
-> **Note:** Gemini は URL クエリパラメータ `?key=` で API キーを渡します。
+> **Note:** Gemini passes the API key via URL query parameter `?key=`.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/gemini/api-key https://generativelanguage.googleapis.com/
-# → キーの値を入力してください: (Gemini API key を入力)
+# → Enter the key value: (enter Gemini API key)
 ```
 
 ### Node.js

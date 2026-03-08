@@ -1,9 +1,11 @@
+[English](slack.md) | [日本語](slack-ja.md)
+
 ## Slack API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/slack/bot-token https://slack.com/
-# → キーの値を入力してください: (Slack Bot Token を入力)
+# → Enter the key value: (enter Slack Bot Token)
 ```
 
 ### Node.js
@@ -11,7 +13,7 @@
 import { createFetch } from 'key-rest';
 const fetch = createFetch();
 
-// チャンネルにメッセージを送信
+// Send a message to a channel
 const result = await fetch(
   'https://slack.com/api/chat.postMessage',
   {

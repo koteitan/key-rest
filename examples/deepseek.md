@@ -1,11 +1,13 @@
+[English](deepseek.md) | [日本語](deepseek-ja.md)
+
 ## DeepSeek API
 
-> **Note:** DeepSeek は OpenAI 互換 API を提供しています。
+> **Note:** DeepSeek provides an OpenAI-compatible API.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/deepseek/api-key https://api.deepseek.com/
-# → キーの値を入力してください: (DeepSeek API key を入力)
+# → Enter the key value: (enter DeepSeek API key)
 ```
 
 ### Node.js

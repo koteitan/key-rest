@@ -1,11 +1,13 @@
+[English](groq.md) | [日本語](groq-ja.md)
+
 ## Groq API
 
-> **Note:** Groq は OpenAI 互換 API を提供しています。
+> **Note:** Groq provides an OpenAI-compatible API.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/groq/api-key https://api.groq.com/
-# → キーの値を入力してください: (Groq API key を入力)
+# → Enter the key value: (enter Groq API key)
 ```
 
 ### Node.js

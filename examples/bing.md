@@ -1,9 +1,11 @@
+[English](bing.md) | [日本語](bing-ja.md)
+
 ## Bing Search API (Azure)
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/bing/api-key https://api.bing.microsoft.com/
-# → キーの値を入力してください: (Azure Bing Search API Key を入力)
+# → Enter the key value: (enter Azure Bing Search API Key)
 ```
 
 ### Node.js

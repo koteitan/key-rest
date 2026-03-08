@@ -1,9 +1,11 @@
+[English](openai.md) | [日本語](openai-ja.md)
+
 ## OpenAI API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/openai/api-key https://api.openai.com/
-# → キーの値を入力してください: (OpenAI API key を入力)
+# → Enter the key value: (enter OpenAI API key)
 ```
 
 ### Node.js

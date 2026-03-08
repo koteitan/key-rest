@@ -1,9 +1,11 @@
+[English](notion.md) | [日本語](notion-ja.md)
+
 ## Notion API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/notion/api-key https://api.notion.com/
-# → キーの値を入力してください: (Notion Integration Token を入力)
+# → Enter the key value: (enter Notion Integration Token)
 ```
 
 ### Node.js

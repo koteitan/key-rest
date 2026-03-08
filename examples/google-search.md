@@ -1,9 +1,11 @@
+[English](google-search.md) | [日本語](google-search-ja.md)
+
 ## Google Custom Search API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/google/api-key https://www.googleapis.com/
-# → キーの値を入力してください: (Google API Key を入力)
+# → Enter the key value: (enter Google API Key)
 ```
 
 ### Node.js

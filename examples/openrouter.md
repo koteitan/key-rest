@@ -1,11 +1,13 @@
+[English](openrouter.md) | [日本語](openrouter-ja.md)
+
 ## OpenRouter API
 
-> **Note:** OpenRouter は複数の AI モデルを統一 API で提供するアグリゲータです。認証は Bearer トークンです。
+> **Note:** OpenRouter is an aggregator that provides multiple AI models through a unified API. Authentication uses a Bearer token.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/openrouter/api-key https://openrouter.ai/
-# → キーの値を入力してください: (OpenRouter API key を入力)
+# → Enter the key value: (enter OpenRouter API key)
 ```
 
 ### Node.js

@@ -1,9 +1,11 @@
+[English](brave.md) | [日本語](brave-ja.md)
+
 ## Brave Search API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/brave/api-key https://api.search.brave.com/
-# → キーの値を入力してください: (Brave API key を入力)
+# → Enter the key value: (enter Brave API key)
 ```
 
 ### Node.js

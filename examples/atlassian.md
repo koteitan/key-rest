@@ -1,13 +1,15 @@
+[English](atlassian.md) | [日本語](atlassian-ja.md)
+
 ## Atlassian API
 
-> **Note:** `base64(...)` 変換関数により、key-rest-daemon が URI 置換後に引数を連結して base64 エンコードします。
+> **Note:** The `base64(...)` transform function causes key-rest-daemon to concatenate arguments and base64-encode them after URI substitution.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/atlassian/email https://api.bitbucket.org/
-# → キーの値を入力してください: (Atlassian email を入力)
+# → Enter the key value: (enter Atlassian email)
 ./key-rest add user1/atlassian/token https://api.bitbucket.org/
-# → キーの値を入力してください: (Atlassian API token を入力)
+# → Enter the key value: (enter Atlassian API token)
 ```
 
 ### Node.js

@@ -1,9 +1,11 @@
+[English](line.md) | [日本語](line-ja.md)
+
 ## LINE Messaging API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/line/channel-access-token https://api.line.me/
-# → キーの値を入力してください: (LINE Channel Access Token を入力)
+# → Enter the key value: (enter LINE Channel Access Token)
 ```
 
 ### Node.js

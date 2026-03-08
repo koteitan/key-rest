@@ -1,11 +1,13 @@
+[English](linear.md) | [日本語](linear-ja.md)
+
 ## Linear API
 
-> **Note:** Linear は GraphQL API です。
+> **Note:** Linear is a GraphQL API.
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/linear/api-key https://api.linear.app/
-# → キーの値を入力してください: (Linear API Key を入力)
+# → Enter the key value: (enter Linear API Key)
 ```
 
 ### Node.js

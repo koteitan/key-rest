@@ -1,9 +1,11 @@
+[English](exa.md) | [日本語](exa-ja.md)
+
 ## Exa Search API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/exa/api-key https://api.exa.ai/
-# → キーの値を入力してください: (Exa API Key を入力)
+# → Enter the key value: (enter Exa API Key)
 ```
 
 ### Node.js

@@ -1,7 +1,9 @@
-# key-rest
-agent に APP key などを見せずに、REST API に App key などの credential を埋め込んで呼び出すためのプロキシです。
+[English](spec.md) | [日本語](spec-ja.md)
 
-# ブロック図
+# key-rest
+A proxy that embeds credentials such as APP keys into REST API calls without exposing them to the agent.
+
+# Block Diagram
 
 ```mermaid
 graph LR
@@ -20,7 +22,7 @@ graph LR
     K -->|decrypt| D
 ```
 
-# シーケンス図
+# Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -30,87 +32,87 @@ sequenceDiagram
     participant D as key-rest-daemon
     participant S as services
 
-    Note over U,D: セットアップフェーズ
+    Note over U,D: Setup Phase
     U->>D: ./key-rest start
-    D->>U: 秘密鍵を入力してください
-    U->>D: (秘密鍵を入力)
-    D->>D: 秘密鍵をメモリに保持<br/>暗号化されたキーを復号
+    D->>U: Enter the passphrase
+    U->>D: (enter passphrase)
+    D->>D: Hold passphrase in memory<br/>Decrypt encrypted keys
     D->>U: daemon started
 
     U->>D: ./key-rest add user1/brave/api-key https://api.search.brave.com/
-    D->>U: キーの値を入力してください
-    U->>D: (キー値を入力)
-    D->>D: キーを暗号化してファイルに保存<br/>メモリにも保持
+    D->>U: Enter the key value
+    U->>D: (enter key value)
+    D->>D: Encrypt key and save to file<br/>Also hold in memory
 
-    Note over A,S: API呼び出しフェーズ
+    Note over A,S: API Call Phase
     A->>K: fetch(url, {headers: {key-rest://...}})
-    K->>D: リクエスト転送 (Unix socket)
-    D->>D: key-rest:// URI を実際のキー値に置換
-    D->>S: HTTP request (実際の credential 付き)
+    K->>D: Forward request (Unix socket)
+    D->>D: Replace key-rest:// URI with actual key value
+    D->>S: HTTP request (with real credentials)
     S-->>D: HTTP response
-    D-->>K: レスポンス転送 (Unix socket)
-    K-->>A: Response オブジェクトを返却
+    D-->>K: Forward response (Unix socket)
+    K-->>A: Return Response object
 ```
 
 # key-rest-daemon
-key-rest-daemon は REST API を呼び出すためのデーモンです。APP KEY を保持し、key-rest からのリクエストを受け取って REST API を呼び出します。
+key-rest-daemon is a daemon for calling REST APIs. It holds APP KEYs and receives requests from key-rest to call REST APIs.
 
-## key-rest-daemon 制御用 commands
-- `./key-rest start` : key-rest-daemon を起動します。
-  - 起動時に秘密鍵を入力するように求められます。入力された秘密鍵はメモリに保存されます。ファイルには保存されません。
-- `./key-rest status` : key-rest-daemon の状態を確認します。
-- `./key-rest stop` : key-rest-daemon を停止します。
-- `./key-rest add [options] <key-uri> <url-prefix>` : key-rest-daemon にキーを追加します。key は key-uri で指定され、対応する URL プレフィックスは url-prefix で指定されます。
-  - key-rest-daemon が running 状態でないときは、秘密鍵を入力するように求められます。
-  - key-rest-daemon が running 状態のときは、秘密鍵は入力する必要はありません。
-  - そのあとに、キーの値を入力するように求められます。入力されたキーは暗号化されてファイルに保存されます。
-  - オプション:
-    - `--allow-url` : URL 内での置換を許可します (クエリパラメータ認証用: Gemini, Trello 等)
-    - `--allow-body` : リクエストボディ内での置換を許可します (ボディ認証用: Tavily 等)
-    - デフォルトでは headers 内のみ置換が許可されます
-- `./key-rest remove <key>` : key-rest-daemon からキーを削除します。
-- `./key-rest list` : key-rest-daemon に登録されているキーの一覧を表示します。
-  - 出力例
+## key-rest-daemon Control Commands
+- `./key-rest start` : Starts the key-rest-daemon.
+  - At startup, you will be prompted to enter a passphrase. The entered passphrase is stored in memory. It is not saved to a file.
+- `./key-rest status` : Checks the status of the key-rest-daemon.
+- `./key-rest stop` : Stops the key-rest-daemon.
+- `./key-rest add [options] <key-uri> <url-prefix>` : Adds a key to the key-rest-daemon. The key is specified by key-uri, and the corresponding URL prefix is specified by url-prefix.
+  - When the key-rest-daemon is not in the running state, you will be prompted to enter the passphrase.
+  - When the key-rest-daemon is in the running state, entering the passphrase is not required.
+  - After that, you will be prompted to enter the key value. The entered key is encrypted and saved to a file.
+  - Options:
+    - `--allow-url` : Allows replacement within the URL (for query parameter authentication: Gemini, Trello, etc.)
+    - `--allow-body` : Allows replacement within the request body (for body authentication: Tavily, etc.)
+    - By default, replacement is only allowed within headers
+- `./key-rest remove <key>` : Removes a key from the key-rest-daemon.
+- `./key-rest list` : Displays a list of keys registered in the key-rest-daemon.
+  - Output example
     ```
     key1: url-prefix1
     key2: url-prefix2
     ```
 
-## key-rest-daemon 状態
+## key-rest-daemon State
 
 ```mermaid
 stateDiagram-v2
     [*] --> stopped
-    stopped --> running : start (秘密鍵入力)
+    stopped --> running : start (enter passphrase)
     running --> stopped : stop
 ```
 
-| 状態 | 説明 |
-|------|------|
-| `stopped` | デーモンプロセスが停止している。ソケットは存在しない。 |
-| `running` | デーモンプロセスが起動中。秘密鍵がメモリに保持され、暗号化されたキーが復号されている。Unix ソケットでリクエストを待ち受けている。 |
+| State | Description |
+|-------|-------------|
+| `stopped` | The daemon process is stopped. The socket does not exist. |
+| `running` | The daemon process is running. The passphrase is held in memory, and the encrypted keys are decrypted. Listening for requests on the Unix socket. |
 
-各状態で利用可能なコマンド:
+Commands available in each state:
 
-| コマンド | stopped | running |
-|----------|---------|---------|
+| Command | stopped | running |
+|---------|---------|---------|
 | `start`  | OK | NG (already running) |
 | `stop`   | NG (not running) | OK |
-| `status` | OK (stopped と表示) | OK (running と表示) |
-| `add`    | OK (秘密鍵入力が必要) | OK (秘密鍵入力不要) |
+| `status` | OK (displays stopped) | OK (displays running) |
+| `add`    | OK (passphrase required) | OK (passphrase not required) |
 | `remove` | OK | OK |
 | `list`   | OK | OK |
 
-## データ保存
+## Data Storage
 
-- データディレクトリ: `~/.key-rest/`
-- 暗号化キーファイル: `~/.key-rest/keys.enc`
-- Unix ソケット: `~/.key-rest/key-rest.sock`
-- PID ファイル: `~/.key-rest/key-rest.pid`
+- Data directory: `~/.key-rest/`
+- Encrypted key file: `~/.key-rest/keys.enc`
+- Unix socket: `~/.key-rest/key-rest.sock`
+- PID file: `~/.key-rest/key-rest.pid`
 
-### keys.enc 形式
+### keys.enc Format
 
-キーは秘密鍵で暗号化され、以下の形式で保存されます:
+Keys are encrypted with the passphrase and saved in the following format:
 
 ```json
 {
@@ -120,19 +122,19 @@ stateDiagram-v2
       "url_prefix": "https://api.search.brave.com/",
       "allow_url": false,
       "allow_body": false,
-      "encrypted_value": "<暗号化されたキー値(base64)>"
+      "encrypted_value": "<encrypted key value (base64)>"
     }
   ]
 }
 ```
 
-暗号化方式: AES-256-GCM (秘密鍵から PBKDF2 で導出した鍵を使用)
+Encryption method: AES-256-GCM (using a key derived from the passphrase via PBKDF2)
 
-## ソケット通信プロトコル
+## Socket Communication Protocol
 
-key-rest クライアントライブラリと key-rest-daemon の間は Unix ドメインソケット (`~/.key-rest/key-rest.sock`) で通信します。メッセージは改行区切りの JSON です。
+The key-rest client library and key-rest-daemon communicate via a Unix domain socket (`~/.key-rest/key-rest.sock`). Messages are newline-delimited JSON.
 
-### リクエスト形式
+### Request Format
 
 ```json
 {
@@ -147,7 +149,7 @@ key-rest クライアントライブラリと key-rest-daemon の間は Unix ド
 }
 ```
 
-### レスポンス形式 (成功時)
+### Response Format (Success)
 
 ```json
 {
@@ -160,7 +162,7 @@ key-rest クライアントライブラリと key-rest-daemon の間は Unix ド
 }
 ```
 
-### レスポンス形式 (エラー時)
+### Response Format (Error)
 
 ```json
 {
@@ -171,105 +173,105 @@ key-rest クライアントライブラリと key-rest-daemon の間は Unix ド
 }
 ```
 
-エラーコード:
+Error Codes:
 
-| code | 説明 |
-|------|------|
-| `KEY_NOT_FOUND` | 指定された key-rest:// URI が登録されていない |
-| `URL_PREFIX_MISMATCH` | リクエスト先 URL が key の url_prefix と一致しない |
-| `HTTP_ERROR` | 外部サービスへの HTTP リクエストが失敗した |
+| code | Description |
+|------|-------------|
+| `KEY_NOT_FOUND` | The specified key-rest:// URI is not registered |
+| `URL_PREFIX_MISMATCH` | The request URL does not match the key's url_prefix |
+| `HTTP_ERROR` | The HTTP request to the external service failed |
 
-### key-rest:// URI の置換ルール
+### key-rest:// URI Replacement Rules
 
-使用例は [examples/](examples/README.md) (2963592) を参照。
+See [examples/](examples/README.md) (2963592) for usage examples.
 
-#### key-rest URI の形式
+#### key-rest URI Format
 
 `key-rest://<key-uri>`
 
-key-uri のパス区切りは `/`、各セグメントの有効文字は `[a-zA-Z0-9_.-]`。セグメント数に制限はない。
+The path separator for key-uri is `/`, and valid characters for each segment are `[a-zA-Z0-9_.-]`. There is no limit on the number of segments.
 
-例: `key-rest://user1/service/key-name`, `key-rest://team/project/group/key`
+Example: `key-rest://user1/service/key-name`, `key-rest://team/project/group/key`
 
-#### Unenclosed (囲みなし) と Enclosed (囲みあり)
+#### Unenclosed and Enclosed
 
-1Password CLI の secret reference syntax を参考に、2つの記法をサポートする。
+Inspired by 1Password CLI's secret reference syntax, two notations are supported.
 
 **Unenclosed:** `key-rest://user1/service/key-name`
-- URI の終端は `[a-zA-Z0-9/_.-]` 以外の文字、または文字列末尾
-- ヘッダー値やクエリパラメータなど、URI の後に `/` が続かない場面で使用可能
+- The end of the URI is determined by a character not in `[a-zA-Z0-9/_.-]`, or the end of the string
+- Can be used in contexts where the URI is not followed by `/`, such as header values or query parameters
 
 **Enclosed:** `{{ key-rest://user1/service/key-name }}`
-- 二重波括弧 `{{ }}` で URI の境界を明示する
-- URI の直後に `/` やその他の有効文字が続く場面で必要
-- 変換関数を適用できる: `{{ 変換関数(引数, ...) }}`
+- Double curly braces `{{ }}` explicitly delimit the URI boundaries
+- Required in contexts where the URI is immediately followed by `/` or other valid characters
+- Transform functions can be applied: `{{ transform_function(args, ...) }}`
 
 ```
-# Unenclosed: URI の後が = や行末なので曖昧さなし
+# Unenclosed: No ambiguity since the URI is followed by = or end of line
 Authorization: Bearer key-rest://user1/openai/api-key
 
-# Enclosed: URI の後に /sendMessage が続くので囲みが必要
+# Enclosed: Enclosure needed since /sendMessage follows the URI
 https://api.telegram.org/bot{{ key-rest://user1/telegram/bot-token }}/sendMessage
 
-# Enclosed + 変換関数: base64 エンコードが必要な場合
+# Enclosed + transform function: When base64 encoding is needed
 Authorization: Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest://user1/atlassian/token) }}
 ```
 
-#### 変換関数
+#### Transform Functions
 
-| 関数 | 説明 | 例 |
-|------|------|-----|
-| `base64(...)` | 引数を連結して base64 エンコードする | `{{ base64(key-rest://user1/email, ":", key-rest://user1/token) }}` |
+| Function | Description | Example |
+|----------|-------------|---------|
+| `base64(...)` | Concatenates arguments and base64 encodes them | `{{ base64(key-rest://user1/email, ":", key-rest://user1/token) }}` |
 
-- 引数はカンマ区切り
-- 文字列リテラルはダブルクォートで囲む (例: `":"`)
-- key-rest:// URI は置換後の値が使われる
-- 将来的に他の変換関数を追加可能
+- Arguments are comma-separated
+- String literals are enclosed in double quotes (e.g., `":"`)
+- key-rest:// URIs use the replaced values
+- Additional transform functions can be added in the future
 
-#### 注入先のパターン分類
+#### Injection Target Pattern Classification
 
-| パターン | 注入先 | 例 | 記法 |
-|----------|--------|-----|------|
-| URL クエリパラメータ | url | `?key=key-rest://user1/gemini/api-key` | unenclosed |
-| カスタムヘッダー値 | headers | `X-Subscription-Token: key-rest://...` | unenclosed |
-| Authorization ヘッダー | headers | `Authorization: Bearer key-rest://...` | unenclosed |
-| Authorization Basic | headers | `Basic {{ base64(key-rest://..., ":", key-rest://...) }}` | enclosed + 変換 |
-| URL パス埋め込み | url | `https://.../bot{{ key-rest://... }}/method` | enclosed |
-| リクエストボディ | body | `{"api_key": "key-rest://..."}` | unenclosed |
+| Pattern | Injection target | Example | Notation |
+|---------|------------------|---------|----------|
+| URL query parameter | url | `?key=key-rest://user1/gemini/api-key` | unenclosed |
+| Custom header value | headers | `X-Subscription-Token: key-rest://...` | unenclosed |
+| Authorization header | headers | `Authorization: Bearer key-rest://...` | unenclosed |
+| Authorization Basic | headers | `Basic {{ base64(key-rest://..., ":", key-rest://...) }}` | enclosed + transform |
+| URL path embedding | url | `https://.../bot{{ key-rest://... }}/method` | enclosed |
+| Request body | body | `{"api_key": "key-rest://..."}` | unenclosed |
 
-#### 置換手順
+#### Replacement Procedure
 
-1. リクエストの全フィールド (url, headers の各値, body) に対して以下の2パターンを検索する:
-   - Enclosed: `\{\{.*?\}\}` → `{{ }}` 内を解析し、変換関数があれば関数と引数を抽出、なければ key-uri を抽出
-   - Unenclosed: `key-rest://[a-zA-Z0-9/_.-]+` → そのまま key-uri を抽出
-   - Enclosed を先に処理し、置換済みの箇所を Unenclosed の対象から除外する
-2. 各マッチに含まれる key-rest:// URI について:
-   a. key-uri が登録されていることを確認する
-   b. リクエスト先 URL が key-uri に紐づいた `url_prefix` と前方一致することを確認する (セキュリティ制約)
-   c. マッチが含まれるフィールドがそのキーで許可されていることを確認する (フィールド制限)
-      - headers: 常に許可
-      - url: `allow_url` が true の場合のみ許可
-      - body: `allow_body` が true の場合のみ許可
-3. key-rest:// URI を実際のキー値に置換する
-4. 変換関数がある場合は適用する (例: `base64(...)` → 引数を連結して base64 エンコード)
-5. マッチ箇所全体 (Enclosed の場合は `{{ }}` を含む) を最終結果で置換する
+1. For all fields in the request (url, each header value, body), search for the following 2 patterns:
+   - Enclosed: `\{\{.*?\}\}` → Parse the content within `{{ }}`, extract the function and arguments if a transform function exists, otherwise extract the key-uri
+   - Unenclosed: `key-rest://[a-zA-Z0-9/_.-]+` → Extract the key-uri as-is
+   - Process Enclosed first, and exclude already-replaced positions from Unenclosed targets
+2. For each key-rest:// URI found in a match:
+   a. Verify that the key-uri is registered
+   b. Verify that the request URL prefix-matches the `url_prefix` associated with the key-uri (security constraint)
+   c. Verify that the field containing the match is allowed for that key (field restriction)
+      - headers: Always allowed
+      - url: Allowed only when `allow_url` is true
+      - body: Allowed only when `allow_body` is true
+3. Replace the key-rest:// URI with the actual key value
+4. If a transform function exists, apply it (e.g., `base64(...)` → concatenate arguments and base64 encode)
+5. Replace the entire match (including `{{ }}` for Enclosed) with the final result
 
 # key-rest
-key-rest は LLM agent からの key-uri 付きの REST API 呼び出しを受け取り、key-rest-daemon にリクエストを転送し、key-rest-daemon からのレスポンスを LLM agent に返します。
+key-rest receives REST API calls with key-rest URIs from the LLM agent, forwards requests to the key-rest-daemon, and returns responses from the key-rest-daemon to the LLM agent.
 
-key-rest は様々なインターフェースがあります。
+key-rest has various interfaces.
 
 ## Node.js
 ### key-rest-fetch
-fetch 互換のインターフェースです。fetch と同様の引数を受け取り、リクエストを key-rest-daemon に転送します。レスポンスも fetch の Response 互換の形式で返します。
+A fetch-compatible interface. It accepts the same arguments as fetch and forwards requests to the key-rest-daemon. Responses are also returned in a fetch Response-compatible format.
 
 ```javascript
 import { createFetch } from 'key-rest';
 
-// key-rest-daemon に接続する fetch 関数を作成
-const fetch = createFetch();  // デフォルト: ~/.key-rest/key-rest.sock
+// Create a fetch function that connects to key-rest-daemon
+const fetch = createFetch();  // Default: ~/.key-rest/key-rest.sock
 
-// 通常の fetch と同じ API で使用可能
+// Can be used with the same API as regular fetch
 const response = await fetch('https://api.example.com/data', {
   method: 'GET',
   headers: {
@@ -281,7 +283,7 @@ const data = await response.json();
 ```
 
 ### key-rest-ws
-WebSocket 互換のインターフェースです。WebSocket と同様の引数を受け取り、キーを注入して WebSocket 接続を確立します。
+A WebSocket-compatible interface. It accepts the same arguments as WebSocket, injects keys, and establishes a WebSocket connection.
 
 ```javascript
 import { createWebSocket } from 'key-rest';
@@ -299,11 +301,11 @@ ws.on('message', (data) => {
 });
 ```
 
-WebSocket の場合、key-rest-daemon が WebSocket 接続を維持し、クライアントとの間でメッセージを中継します。
+For WebSocket, the key-rest-daemon maintains the WebSocket connection and relays messages between the client.
 
 ## Go
 ### key-rest-http
-net/http 互換のインターフェースです。http.Client と同様の API を提供し、リクエストを key-rest-daemon に転送します。レスポンスも `*http.Response` 互換の形式で返します。
+A net/http-compatible interface. It provides an API similar to http.Client and forwards requests to the key-rest-daemon. Responses are also returned in an `*http.Response`-compatible format.
 
 ```go
 package main
@@ -314,7 +316,7 @@ import (
 )
 
 func main() {
-    client := keyrest.NewClient()  // デフォルト: ~/.key-rest/key-rest.sock
+    client := keyrest.NewClient()  // Default: ~/.key-rest/key-rest.sock
 
     req, _ := keyrest.NewRequest("GET", "https://api.example.com/data", nil)
     req.Header.Set("Authorization", "Bearer key-rest://user1/example/api-key")
@@ -331,7 +333,7 @@ func main() {
 
 ## Python
 ### key-rest-requests
-requests 互換のインターフェースです。
+A requests-compatible interface.
 
 ```python
 from key_rest import requests
@@ -347,7 +349,7 @@ data = response.json()
 ```
 
 ### key-rest-httpx
-httpx 互換のインターフェースです。async/await に対応しています。
+An httpx-compatible interface. Supports async/await.
 
 ```python
 from key_rest import httpx
@@ -364,13 +366,13 @@ async with httpx.AsyncClient() as client:
 
 ## curl
 ### key-rest-curl
-curl のラッパーコマンドです。curl と同じ引数を受け取り、key-rest:// URI を解決して実行します。
+A curl wrapper command. It accepts the same arguments as curl, resolves key-rest:// URIs, and executes the request.
 
 ```bash
 ./key-rest curl https://api.example.com/data \
   -H "Authorization: Bearer key-rest://user1/example/api-key"
 ```
 
-# REST API の使用例
+# REST API Usage Examples
 
-[examples/](examples/README.md) を参照してください。
+See [examples/](examples/README.md).

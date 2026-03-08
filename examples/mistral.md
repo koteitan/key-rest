@@ -1,9 +1,11 @@
+[English](mistral.md) | [日本語](mistral-ja.md)
+
 ## Mistral API
 
-### セットアップ
+### Setup
 ```bash
 ./key-rest add user1/mistral/api-key https://api.mistral.ai/
-# → キーの値を入力してください: (Mistral API key を入力)
+# → Enter the key value: (enter Mistral API key)
 ```
 
 ### Node.js
