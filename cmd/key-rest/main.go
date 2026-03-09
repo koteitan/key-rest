@@ -290,6 +290,7 @@ func readPassphrase(prompt string) []byte {
 		result := make([]byte, len(data))
 		copy(result, data)
 		crypto.ZeroClearAndMunlock(buf)
+		crypto.Mlock(result)
 		return result
 	}
 
@@ -299,6 +300,7 @@ func readPassphrase(prompt string) []byte {
 	if err != nil {
 		fatalf("failed to read passphrase: %v\n", err)
 	}
+	crypto.Mlock(pass)
 	return pass
 }
 
