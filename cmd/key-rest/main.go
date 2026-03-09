@@ -85,7 +85,8 @@ func cmdStart(dir string, store *keystore.Store) {
 	}
 
 	passphrase := readPassphrase("Enter passphrase: ")
-	defer crypto.ZeroClear(passphrase)
+	crypto.Mlock(passphrase)
+	defer crypto.ZeroClearAndMunlock(passphrase)
 
 	// Fork to background
 	if os.Getenv("KEY_REST_FOREGROUND") == "1" {
@@ -173,10 +174,12 @@ func cmdAdd(store *keystore.Store, dir string) {
 	running, _ := d.IsRunning()
 
 	passphrase := readPassphrase("Enter passphrase: ")
-	defer crypto.ZeroClear(passphrase)
+	crypto.Mlock(passphrase)
+	defer crypto.ZeroClearAndMunlock(passphrase)
 
 	value := readPassphrase("Enter the key value: ")
-	defer crypto.ZeroClear(value)
+	crypto.Mlock(value)
+	defer crypto.ZeroClearAndMunlock(value)
 
 	if err := store.Add(keyURI, urlPrefix, allowURL, allowBody, value, passphrase); err != nil {
 		fatalf("failed to add key: %v\n", err)
@@ -274,6 +277,7 @@ func readPassphrase(prompt string) []byte {
 	if os.Getenv("KEY_REST_FOREGROUND") == "1" {
 		// In foreground mode (forked process), read from stdin pipe
 		buf := make([]byte, 4096)
+		crypto.Mlock(buf)
 		n, err := os.Stdin.Read(buf)
 		if err != nil {
 			fatalf("failed to read from stdin: %v\n", err)
@@ -285,7 +289,7 @@ func readPassphrase(prompt string) []byte {
 		}
 		result := make([]byte, len(data))
 		copy(result, data)
-		crypto.ZeroClear(buf)
+		crypto.ZeroClearAndMunlock(buf)
 		return result
 	}
 

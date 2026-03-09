@@ -128,6 +128,7 @@ func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, value, pass
 	if s.decrypted != nil {
 		valueCopy := make([]byte, len(value))
 		copy(valueCopy, value)
+		crypto.Mlock(valueCopy)
 		s.decrypted = append(s.decrypted, DecryptedKey{
 			URI:       uri,
 			URLPrefix: urlPrefix,
@@ -172,7 +173,7 @@ func (s *Store) Remove(uri string) error {
 	if s.decrypted != nil {
 		for i, dk := range s.decrypted {
 			if dk.URI == uri {
-				crypto.ZeroClear(dk.Value)
+				crypto.ZeroClearAndMunlock(dk.Value)
 				s.decrypted = append(s.decrypted[:i], s.decrypted[i+1:]...)
 				break
 			}
@@ -229,6 +230,7 @@ func (s *Store) DecryptAll(passphrase []byte) error {
 			s.clearDecrypted(decrypted)
 			return err
 		}
+		crypto.Mlock(value)
 
 		decrypted = append(decrypted, DecryptedKey{
 			URI:       k.URI,
@@ -272,6 +274,6 @@ func (s *Store) clearDecryptedLocked() {
 
 func (s *Store) clearDecrypted(keys []DecryptedKey) {
 	for i := range keys {
-		crypto.ZeroClear(keys[i].Value)
+		crypto.ZeroClearAndMunlock(keys[i].Value)
 	}
 }

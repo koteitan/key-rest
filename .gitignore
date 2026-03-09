@@ -1,6 +1,6 @@
 tmp/
 __pycache__/
 *.pyc
-key-rest
+/key-rest
 *.log
 commit-msg.txt

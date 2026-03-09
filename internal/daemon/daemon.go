@@ -84,12 +84,13 @@ func (d *Daemon) Start(passphrase []byte) error {
 	// Hold passphrase for reload
 	d.passphrase = make([]byte, len(passphrase))
 	copy(d.passphrase, passphrase)
+	crypto.Mlock(d.passphrase)
 
 	// Write PID file
 	pid := os.Getpid()
 	if err := os.WriteFile(d.pidPath(), []byte(strconv.Itoa(pid)), 0600); err != nil {
 		d.store.ClearAll()
-		crypto.ZeroClear(d.passphrase)
+		crypto.ZeroClearAndMunlock(d.passphrase)
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
@@ -144,7 +145,7 @@ func (d *Daemon) shutdown() {
 		d.server.Stop()
 	}
 	d.store.ClearAll()
-	crypto.ZeroClear(d.passphrase)
+	crypto.ZeroClearAndMunlock(d.passphrase)
 	os.Remove(d.pidPath())
 	fmt.Println("daemon stopped")
 }

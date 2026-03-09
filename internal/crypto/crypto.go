@@ -7,6 +7,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
+	"os"
+	"syscall"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -34,7 +37,8 @@ func Encrypt(plaintext, passphrase []byte) ([]byte, error) {
 	}
 
 	key := DeriveKey(passphrase, salt)
-	defer ZeroClear(key)
+	Mlock(key)
+	defer ZeroClearAndMunlock(key)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -73,7 +77,8 @@ func Decrypt(data, passphrase []byte) ([]byte, error) {
 	ciphertext := data[SaltSize+NonceSize:]
 
 	key := DeriveKey(passphrase, salt)
-	defer ZeroClear(key)
+	Mlock(key)
+	defer ZeroClearAndMunlock(key)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -98,4 +103,29 @@ func ZeroClear(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
+}
+
+// Mlock locks a byte slice's memory pages to prevent swapping to disk.
+// Prints a warning to stderr if mlock fails (e.g., insufficient ulimit).
+func Mlock(b []byte) {
+	if len(b) == 0 {
+		return
+	}
+	if err := syscall.Mlock(b); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: mlock failed: %v (secrets may be swapped to disk)\n", err)
+	}
+}
+
+// Munlock unlocks previously mlocked memory pages.
+func Munlock(b []byte) {
+	if len(b) == 0 {
+		return
+	}
+	syscall.Munlock(b) // ignore error
+}
+
+// ZeroClearAndMunlock zeros out a byte slice and then unlocks its memory pages.
+func ZeroClearAndMunlock(b []byte) {
+	ZeroClear(b)
+	Munlock(b)
 }

@@ -16,7 +16,13 @@ const fetch = createFetch();
 ```
 を使ってもらいます。すると、key-rest が `key-rest://user1/claude/api-key` を `sk-ant-api03-abcdefg` に置換して REST API を呼び出して、通常のようにレスポンスを返すことができます。
 
-キー自体は、key-rest コマンドを使って key-rest-daemon に登録します。key-rest-daemon はキーを暗号化してファイルに保存し、リクエストが来たときに復号して使用します。キーは、key-rest-daemon を起動するときのマスターキーで暗号化されるため、マスターキーを知っている人だけがキーの内容を復号できます。マスターキーは起動中の key-rest-daemon のメモリに保持され、ファイルには保存されません。
+キー自体は、key-rest コマンドを使って key-rest-daemon に登録します。key-rest-daemon はキーを暗号化してファイルに保存し、リクエストが来たときに復号して使用します。キーは、key-rest-daemon を起動するときのマスターキーで暗号化されます。
+
+# セキュリティ
+## API キー
+- API キーは key-rest add コマンドで登録します。
+- key-rest add コマンドを実行すると、標準入力から API キーを入力し、key-rest のメモリ上でマスターキーで暗号化されてファイルに保存されます。
+
 
 # ブロック図
 
