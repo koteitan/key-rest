@@ -14,13 +14,17 @@ import (
 
 const maxRequestSize = 10 * 1024 * 1024 // 10 MB
 
+// ReloadFunc is called when a "reload" request is received.
+type ReloadFunc func() error
+
 // Server listens on a Unix domain socket and handles proxy requests.
 type Server struct {
-	socketPath string
-	proxy      *proxy.Proxy
-	listener   net.Listener
-	wg         sync.WaitGroup
-	quit       chan struct{}
+	socketPath   string
+	proxy        *proxy.Proxy
+	listener     net.Listener
+	wg           sync.WaitGroup
+	quit         chan struct{}
+	ReloadHandler ReloadFunc
 }
 
 // New creates a new Server.
@@ -119,9 +123,30 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
+		if req.Type == "reload" {
+			s.handleReload(conn)
+			continue
+		}
+
 		resp := s.proxy.Handle(req)
 		s.writeResponse(conn, resp)
 	}
+}
+
+func (s *Server) handleReload(conn net.Conn) {
+	if s.ReloadHandler == nil {
+		s.writeResponse(conn, &proxy.Response{
+			Error: &proxy.ErrorInfo{Code: "INTERNAL_ERROR", Message: "reload not supported"},
+		})
+		return
+	}
+	if err := s.ReloadHandler(); err != nil {
+		s.writeResponse(conn, &proxy.Response{
+			Error: &proxy.ErrorInfo{Code: "RELOAD_FAILED", Message: err.Error()},
+		})
+		return
+	}
+	s.writeResponse(conn, &proxy.Response{Status: 200, Body: "reloaded"})
 }
 
 func (s *Server) writeResponse(conn net.Conn, resp *proxy.Response) {

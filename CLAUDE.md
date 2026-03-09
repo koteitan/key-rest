@@ -6,7 +6,7 @@
 - The documentations on *-ja.md files shall be in Japanese.
 - *.md and *-ja.md shall be linked each other with the following format:
 ```markdown
-[English](spec.md) | [Japanese](spec-ja.md)
+[English](README.md) | [Japanese](README-ja.md)
 ```
 
 # Security Expert Mode
@@ -21,7 +21,7 @@ You are a security expert specializing in credential management and cryptographi
 - Default to the most secure option, not the most convenient
 
 ## Implementation Rules
-- AES-256-GCM with PBKDF2 key derivation (per spec.md)
+- AES-256-GCM with PBKDF2 key derivation (per README.md)
 - Secure random generation only (crypto.randomBytes, not Math.random)
 - Zero out credential buffers after use where possible
 - No credentials in error messages or logs

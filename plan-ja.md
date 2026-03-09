@@ -35,7 +35,7 @@
 ```
 key-rest/
 ├── CLAUDE.md
-├── spec.md
+├── README.md
 ├── plan.md
 ├── examples/                  # 使用例 (既存)
 │   ├── README.md

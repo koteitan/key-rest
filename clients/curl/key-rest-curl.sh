@@ -104,7 +104,7 @@ RESPONSE=$(printf '%s\n' "$REQUEST" | socat - UNIX-CONNECT:"$SOCKET")
 
 # Check for error
 if printf '%s' "$RESPONSE" | python3 -c 'import sys,json; d=json.load(sys.stdin); sys.exit(0 if "error" in d and d["error"] else 1)' 2>/dev/null; then
-  printf '%s' "$RESPONSE" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f"error: [{d[\"error\"][\"code\"]}] {d[\"error\"][\"message\"]}", file=sys.stderr)'
+  printf '%s' "$RESPONSE" | python3 -c 'import sys,json; d=json.load(sys.stdin); e=d["error"]; print("error: [%s] %s" % (e["code"], e["message"]), file=sys.stderr)'
   exit 1
 fi
 

@@ -11,7 +11,7 @@
 - Example: Including `key-rest://user1/slack/bot-token` in the text field of Slack's chat.postMessage causes the token plaintext to be posted to an attacker's channel
 - The same attack is possible with any service that has message-sending capability: Telegram, LINE, Discord, etc.
 - When a service has multiple keys, a key not used for authentication can be embedded in the body and stolen
-- **Mitigation**: Restrict which fields each key can be substituted into (headers: allowed by default, url/body: explicit opt-in) → Reflected in spec.md
+- **Mitigation**: Restrict which fields each key can be substituted into (headers: allowed by default, url/body: explicit opt-in) → Reflected in README.md
 
 ### 2. Key Leakage from Responses
 - Some APIs echo back request headers (= credentials) in error responses

@@ -35,7 +35,7 @@ Clients are thin wrappers that send/receive JSON over Unix sockets, so they are 
 ```
 key-rest/
 ├── CLAUDE.md
-├── spec.md
+├── README.md
 ├── plan.md
 ├── examples/                  # Usage Examples (existing)
 │   ├── README.md

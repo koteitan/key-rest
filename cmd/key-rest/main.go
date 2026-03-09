@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"golang.org/x/term"
 
@@ -44,7 +49,7 @@ func main() {
 	case "add":
 		cmdAdd(store, dir)
 	case "remove":
-		cmdRemove(store)
+		cmdRemove(store, dir)
 	case "list":
 		cmdList(store)
 	default:
@@ -167,16 +172,8 @@ func cmdAdd(store *keystore.Store, dir string) {
 	d := daemon.New(dir, store)
 	running, _ := d.IsRunning()
 
-	var passphrase []byte
-	if !running {
-		passphrase = readPassphrase("Enter passphrase: ")
-		defer crypto.ZeroClear(passphrase)
-	} else {
-		// When daemon is running, read passphrase from the daemon's memory
-		// For now, still ask (TODO: communicate with daemon)
-		passphrase = readPassphrase("Enter passphrase: ")
-		defer crypto.ZeroClear(passphrase)
-	}
+	passphrase := readPassphrase("Enter passphrase: ")
+	defer crypto.ZeroClear(passphrase)
 
 	value := readPassphrase("Enter the key value: ")
 	defer crypto.ZeroClear(value)
@@ -186,9 +183,15 @@ func cmdAdd(store *keystore.Store, dir string) {
 	}
 
 	fmt.Printf("key added: %s\n", keyURI)
+
+	if running {
+		if err := sendReload(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to notify daemon: %v (restart daemon to apply)\n", err)
+		}
+	}
 }
 
-func cmdRemove(store *keystore.Store) {
+func cmdRemove(store *keystore.Store, dir string) {
 	if len(os.Args) < 3 {
 		fmt.Fprintf(os.Stderr, "Usage: key-rest remove <key-uri>\n")
 		os.Exit(1)
@@ -200,6 +203,13 @@ func cmdRemove(store *keystore.Store) {
 	}
 
 	fmt.Printf("key removed: %s\n", keyURI)
+
+	d := daemon.New(dir, store)
+	if running, _ := d.IsRunning(); running {
+		if err := sendReload(dir); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to notify daemon: %v (restart daemon to apply)\n", err)
+		}
+	}
 }
 
 func cmdList(store *keystore.Store) {
@@ -223,6 +233,40 @@ func cmdList(store *keystore.Store) {
 		}
 		fmt.Printf("%s: %s%s\n", e.URI, e.URLPrefix, flags)
 	}
+}
+
+func sendReload(dir string) error {
+	socketPath := filepath.Join(dir, "key-rest.sock")
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	req := map[string]string{"type": "reload"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	conn.Write(data)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		return fmt.Errorf("no response from daemon")
+	}
+
+	var resp struct {
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
+		return err
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("[%s] %s", resp.Error.Code, resp.Error.Message)
+	}
+	return nil
 }
 
 func readPassphrase(prompt string) []byte {

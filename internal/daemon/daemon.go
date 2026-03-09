@@ -18,9 +18,10 @@ import (
 
 // Daemon manages the key-rest-daemon lifecycle.
 type Daemon struct {
-	dir    string
-	store  *keystore.Store
-	server *server.Server
+	dir        string
+	store      *keystore.Store
+	server     *server.Server
+	passphrase []byte // held in memory for reload
 }
 
 // New creates a new Daemon.
@@ -80,16 +81,22 @@ func (d *Daemon) Start(passphrase []byte) error {
 		return fmt.Errorf("failed to decrypt keys: %w", err)
 	}
 
+	// Hold passphrase for reload
+	d.passphrase = make([]byte, len(passphrase))
+	copy(d.passphrase, passphrase)
+
 	// Write PID file
 	pid := os.Getpid()
 	if err := os.WriteFile(d.pidPath(), []byte(strconv.Itoa(pid)), 0600); err != nil {
 		d.store.ClearAll()
+		crypto.ZeroClear(d.passphrase)
 		return fmt.Errorf("failed to write PID file: %w", err)
 	}
 
 	// Start socket server
 	p := proxy.New(d.store)
 	d.server = server.New(d.socketPath(), p)
+	d.server.ReloadHandler = d.reload
 	if err := d.server.Start(); err != nil {
 		os.Remove(d.pidPath())
 		d.store.ClearAll()
@@ -127,14 +134,17 @@ func (d *Daemon) Stop() error {
 	return nil
 }
 
+func (d *Daemon) reload() error {
+	return d.store.DecryptAll(d.passphrase)
+}
+
 func (d *Daemon) shutdown() {
 	fmt.Println("shutting down...")
 	if d.server != nil {
 		d.server.Stop()
 	}
 	d.store.ClearAll()
+	crypto.ZeroClear(d.passphrase)
 	os.Remove(d.pidPath())
-	// Zero-clear passphrase would happen in the caller
-	crypto.ZeroClear(nil) // no-op, but shows intent
 	fmt.Println("daemon stopped")
 }
