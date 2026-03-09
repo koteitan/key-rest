@@ -1,7 +1,20 @@
 [English](README.md) | [Japanese](README-ja.md)
 
+# 注意
+
+このアプリケーションはまだ十分にテストできていません。
+
 # key-rest
+
+
 agent に APP key などを見せずに、REST API に App key などの credential を埋め込んで呼び出すためのプロキシです。
+
+例えば、`sk-ant-api03-abcdefg` という API key を使って LLM に REST API を呼び出させたいとします。通常は LLM に API key を直接見せる必要がありますが、key-rest を使うと、 `sk-ant-api03-abcdefg` の代わりに `key-rest://user1/claude/api-key` という文字列をLLMに入れてもらって、例えば Node.js なら fetch の代わりに
+```javascript
+import { createFetch } from 'key-rest';
+const fetch = createFetch();
+```
+を使ってもらいます。すると、key-rest が `key-rest://user1/claude/api-key` を `sk-ant-api03-abcdefg` に置換して REST API を呼び出して、通常のようにレスポンスを返すことができます。
 
 # ブロック図
 
