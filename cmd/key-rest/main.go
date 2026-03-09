@@ -295,13 +295,60 @@ func readPassphrase(prompt string) []byte {
 	}
 
 	fmt.Fprint(os.Stderr, prompt)
-	pass, err := term.ReadPassword(int(os.Stdin.Fd()))
+	pass := readPasswordMlocked(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr)
-	if err != nil {
-		fatalf("failed to read passphrase: %v\n", err)
-	}
-	crypto.Mlock(pass)
 	return pass
+}
+
+// readPasswordMlocked reads a password from a terminal with echo disabled.
+// All buffers are mlocked from allocation. The returned slice is mlocked;
+// the caller is responsible for ZeroClearAndMunlock.
+func readPasswordMlocked(fd int) []byte {
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		fatalf("failed to set terminal raw mode: %v\n", err)
+	}
+	defer term.Restore(fd, oldState)
+
+	buf := make([]byte, 4096)
+	crypto.Mlock(buf)
+	n := 0
+
+	var oneByte [1]byte
+	for {
+		_, err := syscall.Read(fd, oneByte[:])
+		if err != nil {
+			crypto.ZeroClearAndMunlock(buf)
+			fatalf("failed to read from terminal: %v\n", err)
+		}
+
+		switch oneByte[0] {
+		case '\n', '\r':
+			// Enter: done
+			result := make([]byte, n)
+			copy(result, buf[:n])
+			crypto.ZeroClearAndMunlock(buf)
+			crypto.Mlock(result)
+			return result
+		case 3:
+			// Ctrl-C: abort
+			crypto.ZeroClearAndMunlock(buf)
+			fmt.Fprintln(os.Stderr)
+			os.Exit(1)
+			return nil
+		case 127, 8:
+			// Backspace / Delete
+			if n > 0 {
+				n--
+				buf[n] = 0
+			}
+		default:
+			if oneByte[0] >= 32 && n < len(buf) {
+				buf[n] = oneByte[0]
+				n++
+			}
+		}
+	}
 }
 
 func fatalf(format string, args ...interface{}) {
