@@ -16,6 +16,8 @@ const fetch = createFetch();
 ```
 を使ってもらいます。すると、key-rest が `key-rest://user1/claude/api-key` を `sk-ant-api03-abcdefg` に置換して REST API を呼び出して、通常のようにレスポンスを返すことができます。
 
+キー自体は、key-rest コマンドを使って key-rest-daemon に登録します。key-rest-daemon はキーを暗号化してファイルに保存し、リクエストが来たときに復号して使用します。キーは、key-rest-daemon を起動するときのマスターキーで暗号化されるため、マスターキーを知っている人だけがキーの内容を復号できます。マスターキーは起動中の key-rest-daemon のメモリに保持され、ファイルには保存されません。
+
 # ブロック図
 
 ```mermaid
@@ -115,84 +117,6 @@ stateDiagram-v2
 | `add`    | OK (秘密鍵入力が必要) | OK (秘密鍵入力不要) |
 | `remove` | OK | OK |
 | `list`   | OK | OK |
-
-## データ保存
-
-- データディレクトリ: `~/.key-rest/`
-- 暗号化キーファイル: `~/.key-rest/keys.enc`
-- Unix ソケット: `~/.key-rest/key-rest.sock`
-- PID ファイル: `~/.key-rest/key-rest.pid`
-
-### keys.enc 形式
-
-キーは秘密鍵で暗号化され、以下の形式で保存されます:
-
-```json
-{
-  "keys": [
-    {
-      "uri": "user1/brave/api-key",
-      "url_prefix": "https://api.search.brave.com/",
-      "allow_url": false,
-      "allow_body": false,
-      "encrypted_value": "<暗号化されたキー値(base64)>"
-    }
-  ]
-}
-```
-
-暗号化方式: AES-256-GCM (秘密鍵から PBKDF2 で導出した鍵を使用)
-
-## ソケット通信プロトコル
-
-key-rest クライアントライブラリと key-rest-daemon の間は Unix ドメインソケット (`~/.key-rest/key-rest.sock`) で通信します。メッセージは改行区切りの JSON です。
-
-### リクエスト形式
-
-```json
-{
-  "type": "http",
-  "method": "GET",
-  "url": "https://api.example.com/data",
-  "headers": {
-    "Authorization": "Bearer key-rest://user1/example/api-key",
-    "Content-Type": "application/json"
-  },
-  "body": null
-}
-```
-
-### レスポンス形式 (成功時)
-
-```json
-{
-  "status": 200,
-  "statusText": "OK",
-  "headers": {
-    "Content-Type": "application/json"
-  },
-  "body": "{\"results\": [...]}"
-}
-```
-
-### レスポンス形式 (エラー時)
-
-```json
-{
-  "error": {
-    "code": "KEY_NOT_FOUND",
-    "message": "Key 'user1/example/api-key' not found"
-  }
-}
-```
-
-エラーコード:
-
-| code | 説明 |
-|------|------|
-| `KEY_NOT_FOUND` | 指定された key-rest:// URI が登録されていない |
-| `URL_PREFIX_MISMATCH` | リクエスト先 URL が key の url_prefix と一致しない |
-| `HTTP_ERROR` | 外部サービスへの HTTP リクエストが失敗した |
 
 ### key-rest:// URI の置換ルール
 
@@ -386,6 +310,38 @@ curl のラッパーコマンドです。curl と同じ引数を受け取り、k
   -H "Authorization: Bearer key-rest://user1/example/api-key"
 ```
 
+# 必要要件
+
+- Linux (WSL2 で動作確認済み)
+- `socat` (curl ラッパークライアント用)
+
+# インストール
+
+[Releases](https://github.com/koteitan/key-rest/releases) ページからバイナリをダウンロードするか、ソースからビルドしてください（下記参照）。
+
 # REST API の使用例
 
 [examples/](examples/README-ja.md) を参照してください。
+
+# 開発者向け
+
+## ビルドに必要なもの
+
+- Go 1.22 以降
+- Node.js 18+ と TypeScript (Node.js クライアント用)
+- Python 3.9+ (Python クライアント用)
+
+## ビルド方法
+
+```bash
+git clone https://github.com/koteitan/key-rest.git
+cd key-rest
+make build
+```
+
+プロジェクトルートに `key-rest` バイナリが作成されます。
+
+テストの実行:
+```bash
+make test
+```

@@ -14,6 +14,8 @@ const fetch = createFetch();
 ```
 Then key-rest replaces `key-rest://user1/claude/api-key` with `sk-ant-api03-abcdefg`, calls the REST API, and returns the response as usual.
 
+The keys themselves are registered with the key-rest-daemon using the key-rest command. The key-rest-daemon encrypts the keys and saves them to a file, decrypting them when a request arrives. Keys are encrypted with a master key that is entered when starting the key-rest-daemon, so only someone who knows the master key can decrypt the key contents. The master key is held in the key-rest-daemon's memory while running and is not saved to a file.
+
 # Block Diagram
 
 ```mermaid
@@ -113,84 +115,6 @@ Commands available in each state:
 | `add`    | OK (passphrase required) | OK (passphrase not required) |
 | `remove` | OK | OK |
 | `list`   | OK | OK |
-
-## Data Storage
-
-- Data directory: `~/.key-rest/`
-- Encrypted key file: `~/.key-rest/keys.enc`
-- Unix socket: `~/.key-rest/key-rest.sock`
-- PID file: `~/.key-rest/key-rest.pid`
-
-### keys.enc Format
-
-Keys are encrypted with the passphrase and saved in the following format:
-
-```json
-{
-  "keys": [
-    {
-      "uri": "user1/brave/api-key",
-      "url_prefix": "https://api.search.brave.com/",
-      "allow_url": false,
-      "allow_body": false,
-      "encrypted_value": "<encrypted key value (base64)>"
-    }
-  ]
-}
-```
-
-Encryption method: AES-256-GCM (using a key derived from the passphrase via PBKDF2)
-
-## Socket Communication Protocol
-
-The key-rest client library and key-rest-daemon communicate via a Unix domain socket (`~/.key-rest/key-rest.sock`). Messages are newline-delimited JSON.
-
-### Request Format
-
-```json
-{
-  "type": "http",
-  "method": "GET",
-  "url": "https://api.example.com/data",
-  "headers": {
-    "Authorization": "Bearer key-rest://user1/example/api-key",
-    "Content-Type": "application/json"
-  },
-  "body": null
-}
-```
-
-### Response Format (Success)
-
-```json
-{
-  "status": 200,
-  "statusText": "OK",
-  "headers": {
-    "Content-Type": "application/json"
-  },
-  "body": "{\"results\": [...]}"
-}
-```
-
-### Response Format (Error)
-
-```json
-{
-  "error": {
-    "code": "KEY_NOT_FOUND",
-    "message": "Key 'user1/example/api-key' not found"
-  }
-}
-```
-
-Error Codes:
-
-| code | Description |
-|------|-------------|
-| `KEY_NOT_FOUND` | The specified key-rest:// URI is not registered |
-| `URL_PREFIX_MISMATCH` | The request URL does not match the key's url_prefix |
-| `HTTP_ERROR` | The HTTP request to the external service failed |
 
 ### key-rest:// URI Replacement Rules
 
@@ -384,6 +308,38 @@ A curl wrapper command. It accepts the same arguments as curl, resolves key-rest
   -H "Authorization: Bearer key-rest://user1/example/api-key"
 ```
 
+# Requirements
+
+- Linux (tested on WSL2)
+- `socat` (for curl wrapper client)
+
+# Install
+
+Download the binary from the [Releases](https://github.com/koteitan/key-rest/releases) page, or build from source (see below).
+
 # REST API Usage Examples
 
 See [examples/](examples/README.md).
+
+# For Developers
+
+## Requirements for Build
+
+- Go 1.22 or later
+- Node.js 18+ and TypeScript (for Node.js client)
+- Python 3.9+ (for Python client)
+
+## How to Build
+
+```bash
+git clone https://github.com/koteitan/key-rest.git
+cd key-rest
+make build
+```
+
+The `key-rest` binary will be created in the project root.
+
+To run tests:
+```bash
+make test
+```
