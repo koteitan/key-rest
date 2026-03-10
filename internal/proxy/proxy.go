@@ -46,15 +46,20 @@ type Proxy struct {
 
 // New creates a new Proxy with the given keystore.
 func New(store *keystore.Store) *Proxy {
-	return &Proxy{
-		store: store,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				// Prevent automatic redirect following to avoid credential leakage
-				return http.ErrUseLastResponse
-			},
+	return NewWithClient(store, &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Prevent automatic redirect following to avoid credential leakage
+			return http.ErrUseLastResponse
 		},
+	})
+}
+
+// NewWithClient creates a new Proxy with a custom http.Client (for testing with TLS test servers).
+func NewWithClient(store *keystore.Store, client *http.Client) *Proxy {
+	return &Proxy{
+		store:  store,
+		client: client,
 	}
 }
 
@@ -62,6 +67,11 @@ func New(store *keystore.Store) *Proxy {
 func (p *Proxy) Handle(req *Request) *Response {
 	if req.Type != "http" {
 		return errorResponse("INVALID_REQUEST", "unsupported request type: "+req.Type)
+	}
+
+	// Enforce HTTPS to prevent credentials from being sent in plaintext
+	if !strings.HasPrefix(req.URL, "https://") {
+		return errorResponse("INSECURE_REQUEST", "only HTTPS URLs are allowed (got HTTP)")
 	}
 
 	// Replace URIs in URL
@@ -135,7 +145,7 @@ func (p *Proxy) replaceField(value, field, requestURL string) (string, error) {
 		}
 
 		// Check url_prefix (security constraint)
-		if !strings.HasPrefix(requestURL, dk.URLPrefix) {
+		if !hasURLPrefix(requestURL, dk.URLPrefix) {
 			return nil, &ProxyError{
 				Code:    "URL_PREFIX_MISMATCH",
 				Message: fmt.Sprintf("request URL does not match url_prefix for key '%s'", keyURI),
@@ -190,6 +200,24 @@ func toErrorResponse(err error) *Response {
 		return errorResponse(pe.Code, pe.Message)
 	}
 	return errorResponse("INTERNAL_ERROR", err.Error())
+}
+
+// hasURLPrefix checks that requestURL starts with prefix at a proper URL boundary.
+// This prevents subdomain attacks: prefix "https://api.example.com" must not match
+// "https://api.example.com.evil.com/". The character after the prefix must be
+// '/', '?', '#', or end of string.
+func hasURLPrefix(requestURL, prefix string) bool {
+	if !strings.HasPrefix(requestURL, prefix) {
+		return false
+	}
+	if strings.HasSuffix(prefix, "/") {
+		return true
+	}
+	if len(requestURL) == len(prefix) {
+		return true
+	}
+	next := requestURL[len(prefix)]
+	return next == '/' || next == '?' || next == '#'
 }
 
 func errorResponse(code, message string) *Response {

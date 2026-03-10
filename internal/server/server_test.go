@@ -24,13 +24,13 @@ func setupServer(t *testing.T, ts *httptest.Server) (*Server, string) {
 	store.Add("user1/test/key", ts.URL+"/", false, false, []byte("real-key"), pass)
 	store.DecryptAll(pass)
 
-	p := proxy.New(store)
+	p := proxy.NewWithClient(store, ts.Client())
 	srv := New(socketPath, p)
 	return srv, socketPath
 }
 
 func TestServerStartStop(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 	defer ts.Close()
@@ -52,7 +52,7 @@ func TestServerStartStop(t *testing.T) {
 }
 
 func TestServerHandleRequest(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer real-key" {
 			t.Errorf("unexpected auth: %s", r.Header.Get("Authorization"))
 		}
@@ -111,7 +111,7 @@ func TestServerHandleRequest(t *testing.T) {
 }
 
 func TestServerInvalidJSON(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer ts.Close()
 
 	srv, socketPath := setupServer(t, ts)

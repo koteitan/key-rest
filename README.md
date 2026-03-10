@@ -5,6 +5,9 @@
 This application has not been sufficiently tested yet.
 
 # key-rest
+
+<img src="key-rest1.png" alt="key-rest" width="200" align="right">
+
 A proxy that embeds credentials such as APP keys into REST API calls without exposing them to the agent.
 
 For example, suppose you want an LLM to call a REST API using an API key `sk-ant-api03-abcdefg`. Normally you would need to expose the API key directly to the LLM, but with key-rest, you have the LLM use `key-rest://user1/claude/api-key` instead of `sk-ant-api03-abcdefg`, and for example in Node.js, use this instead of fetch:

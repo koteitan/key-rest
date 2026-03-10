@@ -25,7 +25,7 @@ func setupProxy(t *testing.T) (*Proxy, *keystore.Store) {
 }
 
 func TestHandleBasicRequest(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer real-api-key" {
 			t.Errorf("unexpected auth header: %s", auth)
@@ -36,12 +36,16 @@ func TestHandleBasicRequest(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	p, store := setupProxy(t)
-	// Re-add with matching URL prefix
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
 	pass := []byte("test-pass")
 	store.Add("user1/ts/key", ts.URL+"/", false, false, []byte("real-api-key"), pass)
 	store.DecryptAll(pass)
-	p = New(store)
+	p := New(store)
+	p.client = ts.Client()
+	p.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
 
 	resp := p.Handle(&Request{
 		Type:   "http",
@@ -123,7 +127,7 @@ func TestHandleFieldRestrictionBody(t *testing.T) {
 }
 
 func TestHandleAllowURL(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("key") != "url-key-val" {
 			t.Errorf("unexpected query param: %s", r.URL.Query().Get("key"))
 		}
@@ -137,6 +141,7 @@ func TestHandleAllowURL(t *testing.T) {
 	store.Add("user1/url-key", ts.URL+"/", true, false, []byte("url-key-val"), pass)
 	store.DecryptAll(pass)
 	p := New(store)
+	p.client = ts.Client()
 
 	resp := p.Handle(&Request{
 		Type:   "http",
@@ -150,7 +155,7 @@ func TestHandleAllowURL(t *testing.T) {
 }
 
 func TestHandleAllowBody(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 	}))
 	defer ts.Close()
@@ -161,6 +166,7 @@ func TestHandleAllowBody(t *testing.T) {
 	store.Add("user1/body-key", ts.URL+"/", false, true, []byte("body-key-val"), pass)
 	store.DecryptAll(pass)
 	p := New(store)
+	p.client = ts.Client()
 
 	body := `{"api_key": "key-rest://user1/body-key"}`
 	resp := p.Handle(&Request{
@@ -172,6 +178,25 @@ func TestHandleAllowBody(t *testing.T) {
 
 	if resp.Error != nil {
 		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+}
+
+func TestHandleHTTPRejected(t *testing.T) {
+	p, _ := setupProxy(t)
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "http://example.com/",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/test/api-key",
+		},
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected INSECURE_REQUEST error")
+	}
+	if resp.Error.Code != "INSECURE_REQUEST" {
+		t.Fatalf("expected INSECURE_REQUEST, got %s", resp.Error.Code)
 	}
 }
 
@@ -198,6 +223,35 @@ func TestHandleURLPrefixMismatch(t *testing.T) {
 	}
 	if resp.Error.Code != "URL_PREFIX_MISMATCH" {
 		t.Fatalf("expected URL_PREFIX_MISMATCH, got %s", resp.Error.Code)
+	}
+}
+
+func TestHasURLPrefix(t *testing.T) {
+	tests := []struct {
+		name       string
+		requestURL string
+		prefix     string
+		want       bool
+	}{
+		{"trailing slash match", "https://api.openai.com/v1/chat", "https://api.openai.com/", true},
+		{"trailing slash no match", "https://api.openai.com.evil.com/", "https://api.openai.com/", false},
+		{"no trailing slash with /", "https://api.openai.com/v1/chat", "https://api.openai.com", true},
+		{"subdomain attack blocked", "https://api.openai.com.evil.com/steal", "https://api.openai.com", false},
+		{"no trailing slash with ?", "https://api.openai.com?foo=bar", "https://api.openai.com", true},
+		{"no trailing slash with #", "https://api.openai.com#section", "https://api.openai.com", true},
+		{"exact match", "https://api.openai.com", "https://api.openai.com", true},
+		{"path boundary blocked", "https://api.example.com/v1/chatgpt", "https://api.example.com/v1/chat", false},
+		{"path boundary match", "https://api.example.com/v1/chat/completions", "https://api.example.com/v1/chat", true},
+		{"completely different", "https://evil.com/", "https://api.openai.com/", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hasURLPrefix(tt.requestURL, tt.prefix)
+			if got != tt.want {
+				t.Errorf("hasURLPrefix(%q, %q) = %v, want %v", tt.requestURL, tt.prefix, got, tt.want)
+			}
+		})
 	}
 }
 
