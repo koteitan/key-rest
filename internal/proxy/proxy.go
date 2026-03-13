@@ -2,6 +2,7 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,22 +45,47 @@ type Proxy struct {
 	client *http.Client
 }
 
-// New creates a new Proxy with the given keystore.
-func New(store *keystore.Store) *Proxy {
-	return NewWithClient(store, &http.Client{
-		Timeout: 30 * time.Second,
+func newClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// Prevent automatic redirect following to avoid credential leakage
 			return http.ErrUseLastResponse
 		},
-	})
+	}
 }
 
-// NewWithClient creates a new Proxy with a custom http.Client (for testing with TLS test servers).
-func NewWithClient(store *keystore.Store, client *http.Client) *Proxy {
+func makeResolver(store *keystore.Store) uri.Resolver {
+	return func(keyURI string) ([]byte, error) {
+		dk := store.Lookup(keyURI)
+		if dk == nil {
+			return nil, fmt.Errorf("key '%s' not found", keyURI)
+		}
+		return dk.Value, nil
+	}
+}
+
+// New creates a new Proxy with the given keystore.
+func New(store *keystore.Store) *Proxy {
+	transport := &secureTransport{
+		resolver: makeResolver(store),
+	}
 	return &Proxy{
 		store:  store,
-		client: client,
+		client: newClient(transport),
+	}
+}
+
+// NewForTest creates a Proxy configured to connect to a specific TLS server (for testing).
+func NewForTest(store *keystore.Store, tlsConfig *tls.Config, addr string) *Proxy {
+	transport := &secureTransport{
+		resolver:     makeResolver(store),
+		tlsConfig:    tlsConfig,
+		overrideAddr: addr,
+	}
+	return &Proxy{
+		store:  store,
+		client: newClient(transport),
 	}
 }
 
@@ -74,42 +100,36 @@ func (p *Proxy) Handle(req *Request) *Response {
 		return errorResponse("INSECURE_REQUEST", "only HTTPS URLs are allowed (got HTTP)")
 	}
 
-	// Replace URIs in URL
-	resolvedURL, err := p.replaceField(req.URL, "url", req.URL)
-	if err != nil {
+	// Validate all key-rest:// URIs (url_prefix, field restrictions) without resolving
+	if err := p.validateField(req.URL, "url", req.URL); err != nil {
 		return toErrorResponse(err)
 	}
-
-	// Replace URIs in headers
-	resolvedHeaders := make(map[string]string, len(req.Headers))
-	for k, v := range req.Headers {
-		resolved, err := p.replaceField(v, "headers", req.URL)
-		if err != nil {
+	for _, v := range req.Headers {
+		if err := p.validateField(v, "headers", req.URL); err != nil {
 			return toErrorResponse(err)
 		}
-		resolvedHeaders[k] = resolved
+	}
+	if req.Body != nil {
+		if err := p.validateField(*req.Body, "body", req.URL); err != nil {
+			return toErrorResponse(err)
+		}
 	}
 
-	// Replace URIs in body
+	// Build http.Request with key-rest:// placeholders still in place.
+	// The secureTransport will resolve them in an mlocked buffer before TLS encryption.
 	var bodyReader io.Reader
 	if req.Body != nil {
-		resolvedBody, err := p.replaceField(*req.Body, "body", req.URL)
-		if err != nil {
-			return toErrorResponse(err)
-		}
-		bodyReader = strings.NewReader(resolvedBody)
+		bodyReader = strings.NewReader(*req.Body)
 	}
-
-	// Build HTTP request
-	httpReq, err := http.NewRequest(req.Method, resolvedURL, bodyReader)
+	httpReq, err := http.NewRequest(req.Method, req.URL, bodyReader)
 	if err != nil {
 		return errorResponse("HTTP_ERROR", "failed to create request: "+err.Error())
 	}
-	for k, v := range resolvedHeaders {
+	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
 	}
 
-	// Execute request
+	// Execute request (secureTransport handles delayed replacement)
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
 		return errorResponse("HTTP_ERROR", "request failed: "+err.Error())
@@ -136,43 +156,41 @@ func (p *Proxy) Handle(req *Request) *Response {
 	}
 }
 
-// replaceField replaces key-rest:// URIs in a field value, checking url_prefix and field restrictions.
-func (p *Proxy) replaceField(value, field, requestURL string) (string, error) {
-	return uri.Replace(value, func(keyURI string) ([]byte, error) {
-		dk := p.store.Lookup(keyURI)
-		if dk == nil {
-			return nil, &ProxyError{Code: "KEY_NOT_FOUND", Message: fmt.Sprintf("key '%s' not found", keyURI)}
-		}
-
-		// Check url_prefix (security constraint)
-		if !hasURLPrefix(requestURL, dk.URLPrefix) {
-			return nil, &ProxyError{
-				Code:    "URL_PREFIX_MISMATCH",
-				Message: fmt.Sprintf("request URL does not match url_prefix for key '%s'", keyURI),
+// validateField checks that all key-rest:// URIs in a field value pass
+// url_prefix and field restriction checks, without resolving actual values.
+func (p *Proxy) validateField(value, field, requestURL string) error {
+	matches := uri.FindAll(value)
+	for _, m := range matches {
+		for _, keyURI := range m.KeyURIs {
+			dk := p.store.Lookup(keyURI)
+			if dk == nil {
+				return &ProxyError{Code: "KEY_NOT_FOUND", Message: fmt.Sprintf("key '%s' not found", keyURI)}
 			}
-		}
-
-		// Check field restriction
-		switch field {
-		case "url":
-			if !dk.AllowURL {
-				return nil, &ProxyError{
-					Code:    "FIELD_NOT_ALLOWED",
-					Message: fmt.Sprintf("key '%s' is not allowed in URL (use --allow-url)", keyURI),
+			if !hasURLPrefix(requestURL, dk.URLPrefix) {
+				return &ProxyError{
+					Code:    "URL_PREFIX_MISMATCH",
+					Message: fmt.Sprintf("request URL does not match url_prefix for key '%s'", keyURI),
 				}
 			}
-		case "body":
-			if !dk.AllowBody {
-				return nil, &ProxyError{
-					Code:    "FIELD_NOT_ALLOWED",
-					Message: fmt.Sprintf("key '%s' is not allowed in body (use --allow-body)", keyURI),
+			switch field {
+			case "url":
+				if !dk.AllowURL {
+					return &ProxyError{
+						Code:    "FIELD_NOT_ALLOWED",
+						Message: fmt.Sprintf("key '%s' is not allowed in URL (use --allow-url)", keyURI),
+					}
+				}
+			case "body":
+				if !dk.AllowBody {
+					return &ProxyError{
+						Code:    "FIELD_NOT_ALLOWED",
+						Message: fmt.Sprintf("key '%s' is not allowed in body (use --allow-body)", keyURI),
+					}
 				}
 			}
 		}
-		// headers: always allowed
-
-		return dk.Value, nil
-	})
+	}
+	return nil
 }
 
 // ParseRequest parses a JSON request from raw bytes.

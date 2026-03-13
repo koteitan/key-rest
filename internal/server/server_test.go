@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"crypto/x509"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"crypto/tls"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/proxy"
@@ -24,7 +27,11 @@ func setupServer(t *testing.T, ts *httptest.Server) (*Server, string) {
 	store.Add("user1/test/key", ts.URL+"/", false, false, []byte("real-key"), pass)
 	store.DecryptAll(pass)
 
-	p := proxy.NewWithClient(store, ts.Client())
+	certPool := x509.NewCertPool()
+	certPool.AddCert(ts.Certificate())
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	p := proxy.NewForTest(store, tlsConfig, ts.Listener.Addr().String())
 	srv := New(socketPath, p)
 	return srv, socketPath
 }

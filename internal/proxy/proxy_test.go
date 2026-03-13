@@ -1,13 +1,22 @@
 package proxy
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 )
+
+func testTLSConfig(ts *httptest.Server) (*tls.Config, string) {
+	certPool := x509.NewCertPool()
+	certPool.AddCert(ts.Certificate())
+	return &tls.Config{RootCAs: certPool}, ts.Listener.Addr().String()
+}
 
 func setupProxy(t *testing.T) (*Proxy, *keystore.Store) {
 	t.Helper()
@@ -41,11 +50,9 @@ func TestHandleBasicRequest(t *testing.T) {
 	pass := []byte("test-pass")
 	store.Add("user1/ts/key", ts.URL+"/", false, false, []byte("real-api-key"), pass)
 	store.DecryptAll(pass)
-	p := New(store)
-	p.client = ts.Client()
-	p.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
 
 	resp := p.Handle(&Request{
 		Type:   "http",
@@ -140,8 +147,9 @@ func TestHandleAllowURL(t *testing.T) {
 	pass := []byte("p")
 	store.Add("user1/url-key", ts.URL+"/", true, false, []byte("url-key-val"), pass)
 	store.DecryptAll(pass)
-	p := New(store)
-	p.client = ts.Client()
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
 
 	resp := p.Handle(&Request{
 		Type:   "http",
@@ -156,6 +164,12 @@ func TestHandleAllowURL(t *testing.T) {
 
 func TestHandleAllowBody(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		bodyStr := string(bodyBytes)
+		expected := `{"api_key": "body-key-val"}`
+		if bodyStr != expected {
+			t.Errorf("unexpected body: got %q, want %q", bodyStr, expected)
+		}
 		w.WriteHeader(200)
 	}))
 	defer ts.Close()
@@ -165,8 +179,9 @@ func TestHandleAllowBody(t *testing.T) {
 	pass := []byte("p")
 	store.Add("user1/body-key", ts.URL+"/", false, true, []byte("body-key-val"), pass)
 	store.DecryptAll(pass)
-	p := New(store)
-	p.client = ts.Client()
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
 
 	body := `{"api_key": "key-rest://user1/body-key"}`
 	resp := p.Handle(&Request{

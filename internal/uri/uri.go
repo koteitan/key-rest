@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -212,5 +213,110 @@ func applyTransform(name string, args []string) (string, error) {
 		return base64.StdEncoding.EncodeToString([]byte(concatenated)), nil
 	default:
 		return "", fmt.Errorf("unknown transform function: %s", name)
+	}
+}
+
+// ReplaceBytes replaces all key-rest:// URIs in the string using the given resolver,
+// returning the result as []byte to avoid creating Go strings containing secrets.
+// The caller should mlock and zero-clear the returned buffer when done.
+func ReplaceBytes(s string, resolve Resolver) ([]byte, error) {
+	matches := FindAll(s)
+	if len(matches) == 0 {
+		return []byte(s), nil
+	}
+
+	// Sort by start position
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Start < matches[j].Start
+	})
+
+	// First pass: resolve all matches and calculate total size
+	type resolved struct {
+		start, end int
+		value      []byte
+	}
+	resolutions := make([]resolved, len(matches))
+	totalSize := 0
+	lastEnd := 0
+	for i, m := range matches {
+		totalSize += m.Start - lastEnd
+		val, err := resolveMatchBytes(m, resolve)
+		if err != nil {
+			for j := 0; j < i; j++ {
+				zeroClear(resolutions[j].value)
+			}
+			return nil, err
+		}
+		resolutions[i] = resolved{m.Start, m.End, val}
+		totalSize += len(val)
+		lastEnd = m.End
+	}
+	totalSize += len(s) - lastEnd
+
+	// Second pass: build result with exact size (no append reallocation)
+	result := make([]byte, totalSize)
+	n := 0
+	lastEnd = 0
+	for _, r := range resolutions {
+		n += copy(result[n:], s[lastEnd:r.start])
+		n += copy(result[n:], r.value)
+		zeroClear(r.value)
+		lastEnd = r.end
+	}
+	copy(result[n:], s[lastEnd:])
+
+	return result, nil
+}
+
+func resolveMatchBytes(m Match, resolve Resolver) ([]byte, error) {
+	resolvedArgs := make([][]byte, len(m.Args))
+	for i, arg := range m.Args {
+		if arg.IsURI {
+			val, err := resolve(arg.Value)
+			if err != nil {
+				return nil, err
+			}
+			// Copy to avoid holding reference to keystore's buffer
+			cpy := make([]byte, len(val))
+			copy(cpy, val)
+			resolvedArgs[i] = cpy
+		} else {
+			resolvedArgs[i] = []byte(arg.Value)
+		}
+	}
+
+	if m.Transform != "" {
+		return applyTransformBytes(m.Transform, resolvedArgs)
+	}
+
+	if len(resolvedArgs) == 1 {
+		return resolvedArgs[0], nil
+	}
+	return nil, errors.New("multiple arguments without transform function")
+}
+
+func applyTransformBytes(name string, args [][]byte) ([]byte, error) {
+	switch name {
+	case "base64":
+		total := 0
+		for _, a := range args {
+			total += len(a)
+		}
+		concatenated := make([]byte, 0, total)
+		for _, a := range args {
+			concatenated = append(concatenated, a...)
+		}
+		encoded := make([]byte, base64.StdEncoding.EncodedLen(len(concatenated)))
+		base64.StdEncoding.Encode(encoded, concatenated)
+		zeroClear(concatenated)
+		return encoded, nil
+	default:
+		return nil, fmt.Errorf("unknown transform function: %s", name)
+	}
+}
+
+func zeroClear(b []byte) {
+	for i := range b {
+		b[i] = 0
 	}
 }
