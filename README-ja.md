@@ -332,8 +332,13 @@ curl のラッパーコマンドです。curl と同じ引数を受け取り、k
 - `socat` (curl ラッパークライアント用)
 
 ```bash
-sudo apt install snapd socat
-sudo snap install go --classic
+# Go (https://go.dev/doc/install)
+wget https://go.dev/dl/go1.24.1.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.24.1.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && source ~/.bashrc
+
+# socat
+sudo apt install socat
 ```
 
 # REST API の使用例
