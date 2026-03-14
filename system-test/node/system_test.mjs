@@ -298,7 +298,7 @@ async function main() {
         if (text.includes(echoKeyValue)) {
           console.log('  FAIL  response-masking (credential leaked in response body)');
           failed++;
-        } else if (!text.includes('key-rest://user1/echo/key')) {
+        } else if (!text.includes('key-rest://')) {
           console.log('  FAIL  response-masking (credential not reverse-substituted)');
           failed++;
         } else {

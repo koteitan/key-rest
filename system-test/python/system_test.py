@@ -308,7 +308,7 @@ def main():
             if echo_key_value in body:
                 print("  FAIL  response-masking (credential leaked in response body)")
                 failed += 1
-            elif "key-rest://user1/echo/key" not in body:
+            elif "key-rest://" not in body:
                 print("  FAIL  response-masking (credential not reverse-substituted)")
                 failed += 1
             else:

@@ -31,6 +31,16 @@ Then key-rest replaces `key-rest://user1/claude/api-key` with `sk-ant-api03-abcd
   - The master key is entered from standard input at key-rest-daemon startup and held in memory.
   - Cleared from memory when key-rest-daemon terminates.
 
+## Response Masking
+
+key-rest-daemon masks credential values in responses to prevent credential exfiltration through APIs that echo back authentication data.
+
+- **Raw credentials**: If a response body or header contains a raw credential value, it is replaced with the corresponding `key-rest://` URI.
+- **Transform outputs**: `{{ base64(...) }}` and other transform expressions are resolved before sending the request. If the upstream echoes back the transformed value (e.g., a base64-encoded credential), it is replaced with the original template string in the response.
+- **JSON-escaped credentials**: Credentials containing special characters (e.g., `"`, `\`) are also masked in their JSON-escaped form.
+
+As a result, responses from echo/debug endpoints may appear as if templates were never expanded (e.g., `{{ base64(...) }}` appears in the response body), even though the upstream server received the correctly expanded values.
+
 # Block Diagram
 
 ```mermaid

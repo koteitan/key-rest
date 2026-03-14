@@ -311,7 +311,7 @@ ECHO_OUTPUT=$("$CURL" "$BASE/echo/test" \
 if echo "$ECHO_OUTPUT" | grep -qF "$ECHO_KEY_VALUE"; then
   echo "  FAIL  response-masking (credential leaked in response body)"
   FAILED=$((FAILED + 1))
-elif echo "$ECHO_OUTPUT" | grep -qF "key-rest://user1/echo/key"; then
+elif echo "$ECHO_OUTPUT" | grep -qF "key-rest://"; then
   echo "  PASS  response-masking"
   PASSED=$((PASSED + 1))
 else

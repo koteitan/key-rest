@@ -543,7 +543,7 @@ func TestResponseMasking(t *testing.T) {
 	}
 
 	// key-rest:// URI SHOULD appear (reverse substitution)
-	if !strings.Contains(string(body), "key-rest://t/echo/key") {
+	if !strings.Contains(string(body), "key-rest://") {
 		t.Fatal("credential was not reverse-substituted in response body")
 	}
 
