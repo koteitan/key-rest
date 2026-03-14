@@ -3,6 +3,7 @@ package keyrest
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+// rawURLKey is a context key for preserving the original URL string
+// before net/url percent-encodes characters like {{ }}.
+type rawURLKey struct{}
 
 type daemonRequest struct {
 	Type    string            `json:"type"`
@@ -45,9 +50,16 @@ func NewClient() *Client {
 	}
 }
 
-// NewRequest creates a new http.Request. This is a convenience wrapper around http.NewRequest.
-func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
-	return http.NewRequest(method, url, body)
+// NewRequest creates a new http.Request, preserving the original URL string.
+// This ensures that key-rest:// URIs with {{ }} enclosed syntax are not
+// percent-encoded by net/url before reaching the daemon.
+func NewRequest(method, rawURL string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, rawURL, body)
+	if err != nil {
+		return nil, err
+	}
+	ctx := context.WithValue(req.Context(), rawURLKey{}, rawURL)
+	return req.WithContext(ctx), nil
 }
 
 // Do sends an http.Request through the key-rest-daemon and returns an http.Response.
@@ -69,10 +81,17 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		body = &s
 	}
 
+	// Use the original URL string if available (set by NewRequest),
+	// otherwise fall back to req.URL.String() which may percent-encode {{ }}.
+	urlStr := req.URL.String()
+	if raw, ok := req.Context().Value(rawURLKey{}).(string); ok {
+		urlStr = raw
+	}
+
 	dreq := daemonRequest{
 		Type:    "http",
 		Method:  req.Method,
-		URL:     req.URL.String(),
+		URL:     urlStr,
 		Headers: headers,
 		Body:    body,
 	}
