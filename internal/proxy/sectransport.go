@@ -62,7 +62,17 @@ func (t *secureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("failed to resolve body: %w", err)
 	}
 
+	// Use raw URL from context if available, to preserve characters like {{ }}
+	// that url.Parse would percent-encode (breaking pattern matching).
 	requestURI := req.URL.RequestURI()
+	if rawURL, ok := ctx.Value(rawURLKey).(string); ok && rawURL != "" {
+		if idx := strings.Index(rawURL, "://"); idx >= 0 {
+			rest := rawURL[idx+3:]
+			if slashIdx := strings.Index(rest, "/"); slashIdx >= 0 {
+				requestURI = rest[slashIdx:]
+			}
+		}
+	}
 	resolvedURI, err := uri.ReplaceBytes(requestURI, t.resolver)
 	if err != nil {
 		crypto.ZeroClear(resolvedBody)

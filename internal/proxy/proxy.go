@@ -2,6 +2,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,12 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/uri"
 )
+
+// rawURLKey is the context key for passing the raw URL string to secureTransport.
+// This avoids url.Parse encoding characters like {{ }} that are needed for pattern matching.
+type contextKey string
+
+const rawURLKey contextKey = "rawURL"
 
 // Request is the JSON request from a key-rest client.
 type Request struct {
@@ -128,6 +135,11 @@ func (p *Proxy) Handle(req *Request) *Response {
 	for k, v := range req.Headers {
 		httpReq.Header.Set(k, v)
 	}
+
+	// Pass raw URL to secureTransport via context so it can extract the
+	// path+query without url.Parse encoding (which mangles {{ }} to %7B%7B...%7D%7D).
+	ctx := context.WithValue(httpReq.Context(), rawURLKey, req.URL)
+	httpReq = httpReq.WithContext(ctx)
 
 	// Execute request (secureTransport handles delayed replacement)
 	resp, err := p.client.Do(httpReq)
