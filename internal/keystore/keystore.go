@@ -51,8 +51,12 @@ func New(dir string) (*Store, error) {
 	return &Store{dir: dir}, nil
 }
 
-// DefaultDir returns the default data directory (~/.key-rest/).
+// DefaultDir returns the data directory.
+// If KEY_REST_DIR is set, it is used; otherwise ~/.key-rest/.
 func DefaultDir() (string, error) {
+	if dir := os.Getenv("KEY_REST_DIR"); dir != "" {
+		return dir, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

@@ -177,15 +177,23 @@ export SSL_CERT_FILE=test-server/cert.pem
 ./key-rest add user1/atlassian/token      https://localhost:9443/atlassian/
 ```
 
-### 3. Test with curl
+### 3. Test with key-rest-curl
 
 ```bash
 # Bearer token (OpenAI)
-echo '{"type":"http","method":"POST","url":"https://localhost:9443/openai/v1/chat/completions","headers":{"Authorization":"Bearer key-rest://user1/openai/api-key","Content-Type":"application/json"},"body":"{\"model\":\"gpt-4o\"}"}' | socat - UNIX-CONNECT:~/.key-rest/key-rest.sock
+./clients/curl/key-rest-curl https://localhost:9443/openai/v1/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/openai/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o"}'
 
 # Custom header (Anthropic)
-echo '{"type":"http","method":"POST","url":"https://localhost:9443/anthropic/v1/messages","headers":{"X-Api-Key":"key-rest://user1/anthropic/api-key","Content-Type":"application/json"},"body":"{\"model\":\"claude-sonnet-4-20250514\"}"}' | socat - UNIX-CONNECT:~/.key-rest/key-rest.sock
+./clients/curl/key-rest-curl https://localhost:9443/anthropic/v1/messages \
+  -H "X-Api-Key: key-rest://user1/anthropic/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-sonnet-4-20250514"}'
 
 # Query parameter (Gemini)
-echo '{"type":"http","method":"POST","url":"https://localhost:9443/gemini/v1beta/models/gemini-2.0-flash:generateContent?key=key-rest://user1/gemini/api-key","headers":{"Content-Type":"application/json"},"body":"{}"}' | socat - UNIX-CONNECT:~/.key-rest/key-rest.sock
+./clients/curl/key-rest-curl https://localhost:9443/gemini/v1beta/models/gemini-2.0-flash:generateContent?key=key-rest://user1/gemini/api-key \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```

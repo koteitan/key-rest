@@ -18,7 +18,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -273,29 +273,37 @@ func sendReload(dir string) error {
 }
 
 func readPassphrase(prompt string) []byte {
-	// Check if stdin is a terminal
-	if os.Getenv("KEY_REST_FOREGROUND") == "1" {
-		// In foreground mode (forked process), read from stdin pipe
+	fd := int(os.Stdin.Fd())
+
+	// Non-terminal stdin: read one line (for piped input or forked process)
+	if !term.IsTerminal(fd) {
 		buf := make([]byte, 4096)
 		crypto.Mlock(buf)
-		n, err := os.Stdin.Read(buf)
-		if err != nil {
-			fatalf("failed to read from stdin: %v\n", err)
+		n := 0
+		var oneByte [1]byte
+		for n < len(buf) {
+			nr, err := syscall.Read(fd, oneByte[:])
+			if nr == 1 {
+				if oneByte[0] == '\n' {
+					break
+				}
+				buf[n] = oneByte[0]
+				n++
+			}
+			if err != nil {
+				break
+			}
 		}
-		// Trim trailing newline
-		data := buf[:n]
-		if len(data) > 0 && data[len(data)-1] == '\n' {
-			data = data[:len(data)-1]
-		}
-		result := make([]byte, len(data))
-		copy(result, data)
+		result := make([]byte, n)
+		copy(result, buf[:n])
 		crypto.ZeroClearAndMunlock(buf)
 		crypto.Mlock(result)
 		return result
 	}
 
+	// Terminal stdin: read with echo disabled
 	fmt.Fprint(os.Stderr, prompt)
-	pass := readPasswordMlocked(int(os.Stdin.Fd()))
+	pass := readPasswordMlocked(fd)
 	fmt.Fprintln(os.Stderr)
 	return pass
 }

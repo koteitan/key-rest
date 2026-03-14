@@ -319,7 +319,7 @@ async with httpx.AsyncClient() as client:
 A curl wrapper command. It accepts the same arguments as curl, resolves key-rest:// URIs, and executes the request.
 
 ```bash
-./key-rest curl https://api.example.com/data \
+./clients/curl/key-rest-curl https://api.example.com/data \
   -H "Authorization: Bearer key-rest://user1/example/api-key"
 ```
 

@@ -321,7 +321,7 @@ async with httpx.AsyncClient() as client:
 curl のラッパーコマンドです。curl と同じ引数を受け取り、key-rest:// URI を解決して実行します。
 
 ```bash
-./key-rest curl https://api.example.com/data \
+./clients/curl/key-rest-curl https://api.example.com/data \
   -H "Authorization: Bearer key-rest://user1/example/api-key"
 ```
 
