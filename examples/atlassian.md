@@ -54,3 +54,9 @@ prs = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl "https://api.bitbucket.org/2.0/repositories/my-workspace/my-repo/pullrequests?state=OPEN" \
+  -H 'Authorization: Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest://user1/atlassian/token) }}'
+```

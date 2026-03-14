@@ -59,3 +59,11 @@ results = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.exa.ai/search \
+  -H "x-api-key: key-rest://user1/exa/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"hello","num_results":10}'
+```

@@ -59,3 +59,11 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.deepseek.com/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/deepseek/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"Hello!"}]}'
+```

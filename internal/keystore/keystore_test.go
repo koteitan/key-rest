@@ -44,7 +44,7 @@ func TestAddAndList(t *testing.T) {
 	}
 }
 
-func TestAddDuplicate(t *testing.T) {
+func TestAddOverwrite(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
@@ -52,9 +52,31 @@ func TestAddDuplicate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := store.Add("user1/key", "https://example.com/", false, false, []byte("val2"), pass)
-	if err == nil {
-		t.Fatal("should reject duplicate URI")
+	// Overwrite with new value and different options
+	if err := store.Add("user1/key", "https://example2.com/", true, false, []byte("val2"), pass); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should still have only one entry
+	entries, _ := store.List()
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].URLPrefix != "https://example2.com/" {
+		t.Fatalf("expected overwritten url-prefix, got %s", entries[0].URLPrefix)
+	}
+	if !entries[0].AllowURL {
+		t.Fatal("expected allow_url to be true after overwrite")
+	}
+
+	// Verify decrypted value
+	store.DecryptAll(pass)
+	dk := store.Lookup("user1/key")
+	if dk == nil {
+		t.Fatal("key not found after overwrite")
+	}
+	if string(dk.Value) != "val2" {
+		t.Fatalf("expected val2, got %s", string(dk.Value))
 	}
 }
 

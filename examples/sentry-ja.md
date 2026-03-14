@@ -45,3 +45,9 @@ projects = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://sentry.io/api/0/projects/ \
+  -H "Authorization: Bearer key-rest://user1/sentry/auth-token"
+```

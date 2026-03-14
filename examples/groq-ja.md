@@ -59,3 +59,11 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.groq.com/openai/v1/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/groq/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama-3.3-70b-versatile","messages":[{"role":"user","content":"Hello!"}]}'
+```

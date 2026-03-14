@@ -57,3 +57,11 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.perplexity.ai/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/perplexity/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"sonar","messages":[{"role":"user","content":"What is key-rest?"}]}'
+```

@@ -57,3 +57,11 @@ result = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.line.me/v2/bot/message/push \
+  -H "Authorization: Bearer key-rest://user1/line/channel-access-token" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"U1234567890abcdef","messages":[{"type":"text","text":"Hello from key-rest!"}]}'
+```

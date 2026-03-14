@@ -103,13 +103,6 @@ func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, value, pass
 		return err
 	}
 
-	// Check for duplicate URI
-	for _, k := range kf.Keys {
-		if k.URI == uri {
-			return errors.New("key already exists: " + uri)
-		}
-	}
-
 	encrypted, err := crypto.Encrypt(value, passphrase)
 	if err != nil {
 		return err
@@ -122,24 +115,47 @@ func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, value, pass
 		AllowBody:      allowBody,
 		EncryptedValue: base64.StdEncoding.EncodeToString(encrypted),
 	}
-	kf.Keys = append(kf.Keys, entry)
+
+	// Overwrite if URI already exists, otherwise append
+	replaced := false
+	for i, k := range kf.Keys {
+		if k.URI == uri {
+			kf.Keys[i] = entry
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		kf.Keys = append(kf.Keys, entry)
+	}
 
 	if err := s.save(kf); err != nil {
 		return err
 	}
 
-	// If decrypted keys are loaded in memory, add this one too
+	// If decrypted keys are loaded in memory, update or add
 	if s.decrypted != nil {
 		valueCopy := make([]byte, len(value))
 		copy(valueCopy, value)
 		crypto.Mlock(valueCopy)
-		s.decrypted = append(s.decrypted, DecryptedKey{
+		dk := DecryptedKey{
 			URI:       uri,
 			URLPrefix: urlPrefix,
 			AllowURL:  allowURL,
 			AllowBody: allowBody,
 			Value:     valueCopy,
-		})
+		}
+		if replaced {
+			for i := range s.decrypted {
+				if s.decrypted[i].URI == uri {
+					crypto.ZeroClearAndMunlock(s.decrypted[i].Value)
+					s.decrypted[i] = dk
+					break
+				}
+			}
+		} else {
+			s.decrypted = append(s.decrypted, dk)
+		}
 	}
 
 	return nil

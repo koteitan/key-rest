@@ -46,3 +46,9 @@ projects = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl "https://gitlab.com/api/v4/projects?membership=true&order_by=updated_at" \
+  -H "PRIVATE-TOKEN: key-rest://user1/gitlab/token"
+```

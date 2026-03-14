@@ -49,3 +49,9 @@ results = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.search.brave.com/res/v1/web/search?q=hello+world \
+  -H "X-Subscription-Token: key-rest://user1/brave/api-key"
+```

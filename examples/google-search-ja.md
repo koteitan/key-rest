@@ -50,3 +50,8 @@ results = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl "https://www.googleapis.com/customsearch/v1?q=hello&cx=YOUR_SEARCH_ENGINE_ID&key=key-rest://user1/google/api-key"
+```

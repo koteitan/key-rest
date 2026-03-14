@@ -58,3 +58,11 @@ result = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://slack.com/api/chat.postMessage \
+  -H "Authorization: Bearer key-rest://user1/slack/bot-token" \
+  -H "Content-Type: application/json" \
+  -d '{"channel":"C01234567","text":"Hello from key-rest!"}'
+```

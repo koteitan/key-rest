@@ -18,7 +18,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.2.0"
+const version = "0.2.1"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -341,6 +341,7 @@ func readPasswordMlocked(fd int) []byte {
 		case 3:
 			// Ctrl-C: abort
 			crypto.ZeroClearAndMunlock(buf)
+			term.Restore(fd, oldState)
 			fmt.Fprintln(os.Stderr)
 			os.Exit(1)
 			return nil

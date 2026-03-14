@@ -49,3 +49,10 @@ repos = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.github.com/user/repos?sort=updated \
+  -H "Authorization: Bearer key-rest://user1/github/token" \
+  -H "Accept: application/vnd.github+json"
+```

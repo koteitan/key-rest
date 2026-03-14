@@ -55,3 +55,10 @@ result = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl "https://api.telegram.org/bot{{key-rest://user1/telegram/bot-token}}/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d '{"chat_id":123456789,"text":"Hello from key-rest!"}'
+```

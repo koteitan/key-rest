@@ -59,3 +59,11 @@ result = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://discord.com/api/v10/channels/123456789/messages \
+  -H "Authorization: Bot key-rest://user1/discord/bot-token" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Hello from key-rest!"}'
+```

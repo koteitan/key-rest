@@ -46,3 +46,9 @@ results = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.bing.microsoft.com/v7.0/search?q=hello \
+  -H "Ocp-Apim-Subscription-Key: key-rest://user1/bing/api-key"
+```

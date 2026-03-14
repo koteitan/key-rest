@@ -57,3 +57,11 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.openai.com/v1/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/openai/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}]}'
+```

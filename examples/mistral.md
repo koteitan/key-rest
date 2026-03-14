@@ -57,3 +57,11 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.mistral.ai/v1/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/mistral/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"mistral-large-latest","messages":[{"role":"user","content":"Hello!"}]}'
+```

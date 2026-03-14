@@ -59,3 +59,11 @@ data = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.linear.app/graphql \
+  -H "Authorization: key-rest://user1/linear/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ issues { nodes { id title state { name } } } }"}'
+```

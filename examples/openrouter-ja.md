@@ -59,3 +59,11 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://openrouter.ai/api/v1/chat/completions \
+  -H "Authorization: Bearer key-rest://user1/openrouter/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"anthropic/claude-sonnet-4-20250514","messages":[{"role":"user","content":"Hello!"}]}'
+```

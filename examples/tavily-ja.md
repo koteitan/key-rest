@@ -57,3 +57,10 @@ results = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.tavily.com/search \
+  -H "Content-Type: application/json" \
+  -d '{"api_key":"key-rest://user1/tavily/api-key","query":"hello","search_depth":"basic"}'
+```

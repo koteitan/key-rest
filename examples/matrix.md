@@ -60,3 +60,12 @@ result = requests.put(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://matrix.example.org/_matrix/client/v3/rooms/!roomid:example.org/send/m.room.message \
+  -X PUT \
+  -H "Authorization: Bearer key-rest://user1/matrix/access-token" \
+  -H "Content-Type: application/json" \
+  -d '{"msgtype":"m.text","body":"Hello from key-rest!"}'
+```

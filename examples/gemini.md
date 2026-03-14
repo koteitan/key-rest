@@ -53,3 +53,10 @@ response = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=key-rest://user1/gemini/api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"contents":[{"parts":[{"text":"Hello, world!"}]}]}'
+```

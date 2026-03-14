@@ -565,6 +565,26 @@ func generateSelfSignedCert(certPath, keyPath string) (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
+// --- Request logging ---
+
+func logHTTPRequest(service string, r *http.Request) {
+	fmt.Printf("--- [%s] %s %s ---\n", service, r.Method, r.URL.String())
+	for name, values := range r.Header {
+		for _, v := range values {
+			fmt.Printf("  %s: %s\n", name, v)
+		}
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		body, err := io.ReadAll(r.Body)
+		if err == nil && len(body) > 0 {
+			fmt.Printf("  Body: %s\n", string(body))
+			// Replace body so handlers can still read it
+			r.Body = io.NopCloser(strings.NewReader(string(body)))
+		}
+	}
+	fmt.Println()
+}
+
 // --- Main ---
 
 func main() {
@@ -572,6 +592,7 @@ func main() {
 	certFile := flag.String("cert", "test-server/cert.pem", "TLS certificate file path")
 	keyFile := flag.String("key", "test-server/key.pem", "TLS private key file path")
 	genCert := flag.Bool("gen-cert", false, "generate a new self-signed certificate (overwrites existing)")
+	logRequest := flag.Bool("log-request", false, "log incoming requests to stdout")
 	flag.Parse()
 
 	// Load or generate TLS cert
@@ -609,6 +630,9 @@ func main() {
 	for name, svc := range svcs {
 		name, svc := name, svc
 		mux.HandleFunc("/"+name+"/", func(w http.ResponseWriter, r *http.Request) {
+			if *logRequest {
+				logHTTPRequest(name, r)
+			}
 			if svc.checkAuth(r) {
 				svc.onOK(w, r)
 			} else {
@@ -619,6 +643,9 @@ func main() {
 
 	// Root handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if *logRequest {
+			logHTTPRequest("(root)", r)
+		}
 		if r.URL.Path != "/" {
 			writeJSON(w, 404, M("error", "unknown service. Use /SERVICE_NAME/..."))
 			return

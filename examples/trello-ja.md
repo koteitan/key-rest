@@ -53,3 +53,8 @@ boards = requests.get(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl "https://api.trello.com/1/members/me/boards?key=key-rest://user1/trello/api-key&token=key-rest://user1/trello/token"
+```

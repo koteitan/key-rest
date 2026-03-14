@@ -60,3 +60,12 @@ results = requests.post(
     }
 ).json()
 ```
+
+### curl
+```bash
+./clients/curl/key-rest-curl https://api.notion.com/v1/databases/DATABASE_ID/query \
+  -H "Authorization: Bearer key-rest://user1/notion/api-key" \
+  -H "Notion-Version: 2022-06-28" \
+  -H "Content-Type: application/json" \
+  -d '{"page_size":10}'
+```
