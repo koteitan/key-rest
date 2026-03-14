@@ -5,49 +5,15 @@
  */
 
 import { execSync, execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { createConnection } from 'node:net';
+import { createFetch } from '../../clients/node/dist/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..');
-
-// --- Inline daemon client (avoid import issues with compiled TS) ---
-
-function sendToDaemon(socketPath, request) {
-  return new Promise((resolve, reject) => {
-    const socket = createConnection(socketPath, () => {
-      socket.write(JSON.stringify(request) + '\n');
-    });
-    let data = '';
-    socket.on('data', (chunk) => {
-      data += chunk.toString();
-      const idx = data.indexOf('\n');
-      if (idx !== -1) {
-        socket.end();
-        try { resolve(JSON.parse(data.slice(0, idx))); }
-        catch { reject(new Error('failed to parse daemon response')); }
-      }
-    });
-    socket.on('error', (err) => reject(new Error(`daemon connection: ${err.message}`)));
-    socket.on('end', () => {
-      if (data && !data.includes('\n')) {
-        try { resolve(JSON.parse(data)); }
-        catch { reject(new Error('incomplete response')); }
-      }
-    });
-  });
-}
-
-async function daemonRequest(socketPath, method, url, headers, body) {
-  const req = { type: 'http', method, url, headers: headers || {}, body: body || null };
-  const resp = await sendToDaemon(socketPath, req);
-  if (resp.error) throw new Error(`[${resp.error.code}] ${resp.error.message}`);
-  return resp;
-}
 
 // --- Helpers ---
 
@@ -196,14 +162,16 @@ async function main() {
     }
 
     const socketPath = env.KEY_REST_SOCKET;
+    const fetch = createFetch({ socketPath });
 
     // --- Test runner ---
     async function runTest(name, method, url, headers, body) {
       total++;
       try {
-        const resp = await daemonRequest(socketPath, method, url, headers, body);
-        if (resp.status === 200 && resp.body) {
-          JSON.parse(resp.body); // verify valid JSON
+        const resp = await fetch(url, { method, headers, body });
+        if (resp.status === 200) {
+          const text = await resp.text();
+          JSON.parse(text); // verify valid JSON
           console.log(`  PASS  ${name}`);
           passed++;
         } else {
