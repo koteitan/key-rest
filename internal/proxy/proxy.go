@@ -130,6 +130,10 @@ func (p *Proxy) Handle(req *Request) *Response {
 		}
 	}
 
+	// Collect transform outputs (e.g., base64-encoded values) for additional
+	// response masking. Raw credential masking alone cannot catch these.
+	transformOutputs := p.collectTransformOutputs(req)
+
 	// Build http.Request with key-rest:// placeholders still in place.
 	// The secureTransport will resolve them in an mlocked buffer before TLS encryption.
 	var bodyReader io.Reader
@@ -163,13 +167,16 @@ func (p *Proxy) Handle(req *Request) *Response {
 	}
 
 	// Reverse-substitute credential values back to key-rest:// URIs in response
-	// to prevent credential leakage through APIs that echo back auth data
-	respBodyStr := p.maskCredentials(string(respBody))
+	// to prevent credential leakage through APIs that echo back auth data.
+	// Transform outputs (e.g., base64) are masked first, then raw credentials.
+	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
+	respBodyStr = p.maskCredentials(respBodyStr)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
-		respHeaders[k] = p.maskCredentials(resp.Header.Get(k))
+		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
+		respHeaders[k] = p.maskCredentials(v)
 	}
 
 	return &Response{
@@ -270,6 +277,45 @@ func (p *Proxy) maskCredentials(s string) string {
 		if len(dk.Value) > 0 {
 			s = strings.ReplaceAll(s, string(dk.Value), "key-rest://"+dk.URI)
 		}
+	}
+	return s
+}
+
+// collectTransformOutputs resolves all transform expressions (e.g., base64)
+// in the request and returns a map from resolved value → original template.
+func (p *Proxy) collectTransformOutputs(req *Request) map[string]string {
+	resolver := makeResolver(p.store)
+	outputs := map[string]string{}
+
+	collectFrom := func(s string) {
+		for _, m := range uri.FindAll(s) {
+			if m.Transform == "" {
+				continue
+			}
+			resolved, err := uri.ResolveMatch(m, resolver)
+			if err != nil {
+				continue
+			}
+			original := s[m.Start:m.End]
+			outputs[resolved] = original
+		}
+	}
+
+	collectFrom(req.URL)
+	for _, v := range req.Headers {
+		collectFrom(v)
+	}
+	if req.Body != nil {
+		collectFrom(*req.Body)
+	}
+
+	return outputs
+}
+
+// maskTransformOutputs replaces resolved transform values in s with their original templates.
+func (p *Proxy) maskTransformOutputs(s string, outputs map[string]string) string {
+	for resolved, original := range outputs {
+		s = strings.ReplaceAll(s, resolved, original)
 	}
 	return s
 }

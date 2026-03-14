@@ -180,6 +180,11 @@ func Replace(s string, resolve Resolver) (string, error) {
 	return s, nil
 }
 
+// ResolveMatch resolves a single match using the given resolver.
+func ResolveMatch(m Match, resolve Resolver) (string, error) {
+	return resolveMatch(m, resolve)
+}
+
 func resolveMatch(m Match, resolve Resolver) (string, error) {
 	// Resolve all URI arguments
 	resolvedArgs := make([]string, len(m.Args))

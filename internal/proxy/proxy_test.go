@@ -340,6 +340,59 @@ func TestHandleUserinfoRejected(t *testing.T) {
 	}
 }
 
+func TestHandleBase64TransformMasking(t *testing.T) {
+	// Upstream echoes back the Authorization header containing a base64-encoded credential
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(`{"headers":{"Authorization":"` + auth + `"}}`))
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/atl/email", ts.URL+"/", false, false, []byte("user@example.com"), pass)
+	store.Add("user1/atl/token", ts.URL+"/", false, false, []byte("SECRET-TOKEN-456"), pass)
+	store.DecryptAll(pass)
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
+
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    ts.URL + "/anything",
+		Headers: map[string]string{
+			"Authorization": `Basic {{ base64(key-rest://user1/atl/email, ":", key-rest://user1/atl/token) }}`,
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+
+	// Raw credentials must NOT appear
+	if strings.Contains(resp.Body, "user@example.com") {
+		t.Fatal("email credential leaked in response body")
+	}
+	if strings.Contains(resp.Body, "SECRET-TOKEN-456") {
+		t.Fatal("token credential leaked in response body")
+	}
+
+	// Base64-encoded value must NOT appear (this is the issue #5 fix)
+	// base64("user@example.com:SECRET-TOKEN-456") = "dXNlckBleGFtcGxlLmNvbTpTRUNSRVQtVE9LRU4tNDU2"
+	if strings.Contains(resp.Body, "dXNlckBleGFtcGxlLmNvbTpTRUNSRVQtVE9LRU4tNDU2") {
+		t.Fatal("base64-encoded credential leaked in response body (issue #5)")
+	}
+
+	// The original template should appear instead
+	if !strings.Contains(resp.Body, "base64(") {
+		t.Fatal("base64 transform was not reverse-substituted in response body")
+	}
+}
+
 func TestHandleInvalidType(t *testing.T) {
 	p, _ := setupProxy(t)
 	resp := p.Handle(&Request{
