@@ -345,6 +345,18 @@ See [examples/](examples/README.md).
 
 # Testing
 
+## Requirements for Testing
+
+- Node.js 18+ (for Node.js client tests)
+- Python 3.9+ (for Python client tests)
+
+```bash
+sudo apt install nodejs npm python3
+cd clients/node && npm install
+```
+
+## Test Targets
+
 ```
 make test                    # Run all tests
 ├── make test-unit           # Unit tests
@@ -374,12 +386,6 @@ make test                    # Run all tests
 System tests use [test-server/](test-server/README.md) — a mock HTTPS server that mimics the authentication of all 26 supported services. See [system-test/](system-test/README.md) for details.
 
 # For Developers
-
-## Requirements for Build
-
-- Go 1.24 or later
-- Node.js 18+ and TypeScript (for Node.js client)
-- Python 3.9+ (for Python client)
 
 ## How to Build
 

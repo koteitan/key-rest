@@ -347,6 +347,18 @@ sudo apt install socat
 
 # テスト
 
+## テストに必要なもの
+
+- Node.js 18+ (Node.js クライアントテスト用)
+- Python 3.9+ (Python クライアントテスト用)
+
+```bash
+sudo apt install nodejs npm python3
+cd clients/node && npm install
+```
+
+## テストターゲット
+
 ```
 make test                    # 全テスト実行
 ├── make test-unit           # ユニットテスト
@@ -376,12 +388,6 @@ make test                    # 全テスト実行
 システムテストは [test-server/](test-server/README-ja.md)（全26サービスの認証を模倣するモック HTTPS サーバー）を使用します。詳細は [system-test/](system-test/README-ja.md) を参照してください。
 
 # 開発者向け
-
-## ビルドに必要なもの
-
-- Go 1.24 以降
-- Node.js 18+ と TypeScript (Node.js クライアント用)
-- Python 3.9+ (Python クライアント用)
 
 ## ビルド方法
 

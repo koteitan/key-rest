@@ -11,7 +11,7 @@ test: test-unit test-system
 test-unit: test-go test-python test-node
 
 test-go:
-	go test $(shell go list ./... | grep -v system-test) -count=1
+	go test $(shell go list ./... | grep -v system-test) -count=1 | grep -v '\[no test files\]'
 
 test-python:
 	cd clients/python && python3 -m unittest test_requests -v

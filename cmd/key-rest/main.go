@@ -18,7 +18,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.2.3"
+const version = "0.2.4"
 
 func main() {
 	if len(os.Args) < 2 {
