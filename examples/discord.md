@@ -1,4 +1,4 @@
-[English](discord.md) | [Japanese](discord-ja.md)
+[← Back](README.md) | [English](discord.md) | [Japanese](discord-ja.md)
 
 ## Discord API
 

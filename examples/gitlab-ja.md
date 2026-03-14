@@ -1,4 +1,4 @@
-[English](gitlab.md) | [Japanese](gitlab-ja.md)
+[← Back](README-ja.md) | [English](gitlab.md) | [Japanese](gitlab-ja.md)
 
 ## GitLab API
 

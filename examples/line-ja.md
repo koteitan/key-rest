@@ -1,4 +1,4 @@
-[English](line.md) | [Japanese](line-ja.md)
+[← Back](README-ja.md) | [English](line.md) | [Japanese](line-ja.md)
 
 ## LINE Messaging API
 

@@ -1,4 +1,4 @@
-[English](notion.md) | [Japanese](notion-ja.md)
+[← Back](README-ja.md) | [English](notion.md) | [Japanese](notion-ja.md)
 
 ## Notion API
 

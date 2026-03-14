@@ -1,4 +1,4 @@
-[English](README.md) | [Japanese](README-ja.md)
+[← Back](../README-ja.md) | [English](README.md) | [Japanese](README-ja.md)
 
 # test-server
 
@@ -120,80 +120,6 @@ go run ./test-server/
 
 他のサービスもそれぞれの実 API のエラー形式に準拠しています。
 
-## key-rest との連携テスト
+## 関連
 
-### 1. 証明書の信頼設定
-
-```bash
-# 方法 A: システムのトラストストアに追加 (Ubuntu/WSL2)
-sudo cp test-server/cert.pem /usr/local/share/ca-certificates/key-rest-test.crt
-sudo update-ca-certificates
-
-# 方法 B: 環境変数で指定
-export SSL_CERT_FILE=test-server/cert.pem
-```
-
-### 2. テスト用キーの登録
-
-```bash
-# Bearer トークン系サービス
-./key-rest add user1/openai/api-key       https://localhost:9443/openai/
-./key-rest add user1/anthropic/api-key    https://localhost:9443/anthropic/
-./key-rest add user1/github/token         https://localhost:9443/github/
-./key-rest add user1/mistral/api-key      https://localhost:9443/mistral/
-./key-rest add user1/slack/bot-token      https://localhost:9443/slack/
-./key-rest add user1/openrouter/api-key   https://localhost:9443/openrouter/
-./key-rest add user1/sentry/auth-token    https://localhost:9443/sentry/
-./key-rest add user1/groq/api-key         https://localhost:9443/groq/
-./key-rest add user1/xai/api-key          https://localhost:9443/xai/
-./key-rest add user1/perplexity/api-key   https://localhost:9443/perplexity/
-./key-rest add user1/line/channel-access-token https://localhost:9443/line/
-./key-rest add user1/deepseek/api-key     https://localhost:9443/deepseek/
-./key-rest add user1/notion/api-key       https://localhost:9443/notion/
-./key-rest add user1/matrix/access-token  https://localhost:9443/matrix/
-./key-rest add user1/discord/bot-token    https://localhost:9443/discord/
-./key-rest add user1/linear/api-key       https://localhost:9443/linear/
-
-# カスタムヘッダー系サービス
-./key-rest add user1/exa/api-key          https://localhost:9443/exa/
-./key-rest add user1/brave/api-key        https://localhost:9443/brave/
-./key-rest add user1/gitlab/token         https://localhost:9443/gitlab/
-./key-rest add user1/bing/api-key         https://localhost:9443/bing/
-
-# クエリパラメータ系サービス (--allow-url 必須)
-./key-rest add --allow-url user1/gemini/api-key       https://localhost:9443/gemini/
-./key-rest add --allow-url user1/google/api-key        https://localhost:9443/google-search/
-./key-rest add --allow-url user1/trello/api-key        https://localhost:9443/trello/
-./key-rest add --allow-url user1/trello/token          https://localhost:9443/trello/
-
-# ボディフィールド系サービス (--allow-body 必須)
-./key-rest add --allow-body user1/tavily/api-key       https://localhost:9443/tavily/
-
-# パス埋め込み系サービス (--allow-url 必須)
-./key-rest add --allow-url user1/telegram/bot-token    https://localhost:9443/telegram/
-
-# Basic 認証 (2つのキー)
-./key-rest add user1/atlassian/email      https://localhost:9443/atlassian/
-./key-rest add user1/atlassian/token      https://localhost:9443/atlassian/
-```
-
-### 3. key-rest-curl でテスト
-
-```bash
-# Bearer トークン (OpenAI)
-./clients/curl/key-rest-curl https://localhost:9443/openai/v1/chat/completions \
-  -H "Authorization: Bearer key-rest://user1/openai/api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o"}'
-
-# カスタムヘッダー (Anthropic)
-./clients/curl/key-rest-curl https://localhost:9443/anthropic/v1/messages \
-  -H "X-Api-Key: key-rest://user1/anthropic/api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"claude-sonnet-4-20250514"}'
-
-# クエリパラメータ (Gemini)
-./clients/curl/key-rest-curl https://localhost:9443/gemini/v1beta/models/gemini-2.0-flash:generateContent?key=key-rest://user1/gemini/api-key \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
+- [システムテスト](../system-test/README-ja.md) — このサーバーを使用した自動エンドツーエンドテスト

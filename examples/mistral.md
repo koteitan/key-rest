@@ -1,4 +1,4 @@
-[English](mistral.md) | [Japanese](mistral-ja.md)
+[← Back](README.md) | [English](mistral.md) | [Japanese](mistral-ja.md)
 
 ## Mistral API
 

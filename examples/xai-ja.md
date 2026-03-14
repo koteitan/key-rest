@@ -1,4 +1,4 @@
-[English](xai.md) | [Japanese](xai-ja.md)
+[← Back](README-ja.md) | [English](xai.md) | [Japanese](xai-ja.md)
 
 ## xAI (Grok) API
 

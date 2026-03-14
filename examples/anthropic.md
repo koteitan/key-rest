@@ -1,4 +1,4 @@
-[English](anthropic.md) | [Japanese](anthropic-ja.md)
+[← Back](README.md) | [English](anthropic.md) | [Japanese](anthropic-ja.md)
 
 ## Anthropic API
 

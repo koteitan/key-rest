@@ -1,4 +1,4 @@
-[English](bing.md) | [Japanese](bing-ja.md)
+[← Back](README.md) | [English](bing.md) | [Japanese](bing-ja.md)
 
 ## Bing Search API (Azure)
 
