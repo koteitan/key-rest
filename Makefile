@@ -21,6 +21,8 @@ test-node:
 
 test-system:
 	system-test/curl/system-test.sh
+	python3 system-test/python/system_test.py
+	node system-test/node/system_test.mjs
 
 clean:
 	rm -f $(BUILD_DIR)/$(BINARY)

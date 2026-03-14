@@ -10,9 +10,12 @@
 |---|---|
 | [go/](go/README-ja.md) | `go test` によるGoテスト（インライン Unix ソケットクライアント使用） |
 | [curl/](curl/README-ja.md) | [key-rest-curl](../clients/curl/key-rest-curl) を使用するシェルスクリプト |
+| [python/](python/README-ja.md) | `key_rest.requests` クライアントライブラリを使用する Python スクリプト |
+| [node/](node/README-ja.md) | `node:net` Unix ソケットクライアントを使用する Node.js スクリプト |
 
 ## 前提条件
 
 - Go 1.21+
 - bash（curl バリアント用）
-- python3（curl バリアント用、ポート検出）
+- python3
+- Node.js 18+

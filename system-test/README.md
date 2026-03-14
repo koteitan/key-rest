@@ -10,9 +10,12 @@ End-to-end tests that verify all 26 services work correctly through key-rest. Ea
 |---|---|
 | [go/](go/README.md) | Go test using `go test` with inline Unix socket client |
 | [curl/](curl/README.md) | Shell script using [key-rest-curl](../clients/curl/key-rest-curl) |
+| [python/](python/README.md) | Python script using `key_rest.requests` client library |
+| [node/](node/README.md) | Node.js script using `node:net` Unix socket client |
 
 ## Prerequisites
 
 - Go 1.21+
 - bash (for curl variant)
-- python3 (for curl variant, port discovery)
+- python3
+- Node.js 18+
