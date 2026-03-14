@@ -17,7 +17,19 @@ const fetch = createFetch();
 ```
 Then key-rest replaces `key-rest://user1/claude/api-key` with `sk-ant-api03-abcdefg`, calls the REST API, and returns the response as usual.
 
-The keys themselves are registered with the key-rest-daemon using the key-rest command. The key-rest-daemon encrypts the keys and saves them to a file, decrypting them when a request arrives. Keys are encrypted with a master key that is entered when starting the key-rest-daemon, so only someone who knows the master key can decrypt the key contents. The master key is held in the key-rest-daemon's memory while running and is not saved to a file.
+# Security
+## API Key
+- The following describes where API keys are stored in plaintext:
+  - During key-rest add:
+    - Entered from standard input and held in memory.
+    - Encrypted with the master key and saved to a file.
+  - During key-rest-daemon startup:
+    - Encrypted API keys stored in the file are decrypted and held in memory.
+    - Encrypted for HTTPS transmission.
+## Master Key
+- The following describes where the master key is stored in plaintext:
+  - The master key is entered from standard input at key-rest-daemon startup and held in memory.
+  - Cleared from memory when key-rest-daemon terminates.
 
 # Block Diagram
 

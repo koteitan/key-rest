@@ -6,6 +6,7 @@
 
 # key-rest
 
+<img src="key-rest1.png" alt="key-rest" width="200" align="right">
 
 agent に APP key などを見せずに、REST API に App key などの credential を埋め込んで呼び出すためのプロキシです。
 
@@ -20,9 +21,17 @@ const fetch = createFetch();
 
 # セキュリティ
 ## API キー
-- API キーは key-rest add コマンドで登録します。
-- key-rest add コマンドを実行すると、標準入力から API キーを入力し、key-rest のメモリ上でマスターキーで暗号化されてファイルに保存されます。
-
+- API キーが平文で保存される領域は下記の通りです。
+  - key-rest add 実行時:
+    - 標準入力から入力され、メモリに保持されます。
+    - マスターキーにて暗号化され、ファイルに保存されます。
+  - key-rest-daemon 起動時:
+    - ファイルに保存されている暗号化された API キーが復号され、メモリに保持されます。
+    - https のために暗号化されます。
+## マスターキー
+- マスターキーが平文で保存される領域は下記の通りです。
+  - マスターキーは key-rest-daemon の起動時に標準入力から入力され、メモリに保持されます。
+  - key-rest-daemon 終了時にメモリから消去されます。
 
 # ブロック図
 
