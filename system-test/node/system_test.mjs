@@ -276,6 +276,42 @@ async function main() {
       `${base}/atlassian/2.0/repositories/ws/repo/pullrequests`,
       { 'Authorization': 'Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest://user1/atlassian/token) }}' });
 
+    // --- Response masking test ---
+    console.log('');
+    console.log('=== Testing response masking ===');
+    console.log('');
+    {
+      total++;
+      const echoKeyValue = creds['openai/api-key'];
+      // Register a key for the echo endpoint
+      const echoInput = `${passphrase}\n${echoKeyValue}\n`;
+      execFileSync(keyRest, ['add', 'user1/echo/key', base + '/echo/'], {
+        input: echoInput, env, stdio: 'pipe',
+      });
+
+      try {
+        const resp = await fetch(`${base}/echo/test`, {
+          method: 'GET',
+          headers: { 'Authorization': 'Bearer key-rest://user1/echo/key' },
+        });
+        const text = await resp.text();
+        if (text.includes(echoKeyValue)) {
+          console.log('  FAIL  response-masking (credential leaked in response body)');
+          failed++;
+        } else if (!text.includes('key-rest://user1/echo/key')) {
+          console.log('  FAIL  response-masking (credential not reverse-substituted)');
+          failed++;
+        } else {
+          console.log('  PASS  response-masking');
+          passed++;
+        }
+      } catch (e) {
+        console.log(`  FAIL  response-masking`);
+        console.log(`        ${e.message}`);
+        failed++;
+      }
+    }
+
     // --- Summary ---
     console.log('');
     console.log(`=== Results: ${passed}/${total} passed, ${failed} failed ===`);

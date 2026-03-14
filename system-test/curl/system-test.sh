@@ -294,6 +294,31 @@ run_test "telegram" "$CURL" "$BASE/telegram/bot{{key-rest://user1/telegram/bot-t
 run_test "atlassian" "$CURL" "$BASE/atlassian/2.0/repositories/ws/repo/pullrequests" \
   -H 'Authorization: Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest://user1/atlassian/token) }}'
 
+# --- Response masking test ---
+
+echo ""
+echo "=== Testing response masking ==="
+echo ""
+
+ECHO_KEY_VALUE="${CREDS[openai/api-key]}"
+printf '%s\n%s\n' "$PASS" "$ECHO_KEY_VALUE" | \
+  "$WORK/key-rest" add "user1/echo/key" "$BASE/echo/" 2>/dev/null
+
+TOTAL=$((TOTAL + 1))
+ECHO_OUTPUT=$("$CURL" "$BASE/echo/test" \
+  -H "Authorization: Bearer key-rest://user1/echo/key" 2>&1) || true
+
+if echo "$ECHO_OUTPUT" | grep -qF "$ECHO_KEY_VALUE"; then
+  echo "  FAIL  response-masking (credential leaked in response body)"
+  FAILED=$((FAILED + 1))
+elif echo "$ECHO_OUTPUT" | grep -qF "key-rest://user1/echo/key"; then
+  echo "  PASS  response-masking"
+  PASSED=$((PASSED + 1))
+else
+  echo "  FAIL  response-masking (credential not reverse-substituted)"
+  FAILED=$((FAILED + 1))
+fi
+
 # --- Summary ---
 
 echo ""

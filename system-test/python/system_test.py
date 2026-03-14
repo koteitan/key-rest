@@ -286,6 +286,39 @@ def main():
                  f"{base}/atlassian/2.0/repositories/ws/repo/pullrequests",
                  {"Authorization": 'Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest://user1/atlassian/token) }}'})
 
+        # --- Response masking test ---
+        print()
+        print("=== Testing response masking ===")
+        print()
+        total += 1
+        echo_key_value = creds["openai/api-key"]
+        # Register a key for the echo endpoint
+        subprocess.run(
+            [key_rest, "add", "user1/echo/key", base + "/echo/"],
+            input=f"{passphrase}\n{echo_key_value}\n".encode(),
+            env=env, capture_output=True, check=True,
+        )
+        try:
+            resp = get(
+                f"{base}/echo/test",
+                headers={"Authorization": "Bearer key-rest://user1/echo/key"},
+                socket_path=socket_path,
+            )
+            body = resp.text
+            if echo_key_value in body:
+                print("  FAIL  response-masking (credential leaked in response body)")
+                failed += 1
+            elif "key-rest://user1/echo/key" not in body:
+                print("  FAIL  response-masking (credential not reverse-substituted)")
+                failed += 1
+            else:
+                print("  PASS  response-masking")
+                passed += 1
+        except Exception as e:
+            print(f"  FAIL  response-masking")
+            print(f"        {e}")
+            failed += 1
+
         # --- Summary ---
         print()
         print(f"=== Results: {passed}/{total} passed, {failed} failed ===")
