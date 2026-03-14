@@ -4,3 +4,5 @@ __pycache__/
 /key-rest
 *.log
 commit-msg.txt
+test-server/test-server
+test-server/*.pem

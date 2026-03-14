@@ -336,6 +336,10 @@ Download the binary from the [Releases](https://github.com/koteitan/key-rest/rel
 
 See [examples/](examples/README.md).
 
+# Testing
+
+See [test-server/](test-server/README.md) for the mock API test server that mimics all 26 supported services.
+
 # For Developers
 
 ## Requirements for Build
