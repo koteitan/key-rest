@@ -1,5 +1,5 @@
 // System test: starts test-server, sets up daemon internally,
-// and tests all 26 services end-to-end via Unix socket client.
+// and tests all 26 services end-to-end via clients/go client library.
 package systemtest
 
 import (
@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,84 +17,11 @@ import (
 	"testing"
 	"time"
 
+	keyrest "github.com/koteitan/key-rest/go"
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/proxy"
 	"github.com/koteitan/key-rest/internal/server"
 )
-
-// --- Inline Unix socket client (equivalent to clients/go) ---
-
-type daemonRequest struct {
-	Type    string            `json:"type"`
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers"`
-	Body    *string           `json:"body,omitempty"`
-}
-
-type daemonResponse struct {
-	Status     int               `json:"status"`
-	StatusText string            `json:"statusText"`
-	Headers    map[string]string `json:"headers"`
-	Body       string            `json:"body"`
-	Error      *struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// sendRequest sends an HTTP request through the daemon Unix socket and returns the response.
-func sendRequest(socketPath, method, url string, headers map[string]string, body string) (*http.Response, error) {
-	conn, err := net.Dial("unix", socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("dial daemon: %w", err)
-	}
-	defer conn.Close()
-
-	dreq := daemonRequest{
-		Type:    "http",
-		Method:  method,
-		URL:     url,
-		Headers: headers,
-	}
-	if body != "" {
-		dreq.Body = &body
-	}
-
-	data, err := json.Marshal(dreq)
-	if err != nil {
-		return nil, err
-	}
-	data = append(data, '\n')
-	if _, err := conn.Write(data); err != nil {
-		return nil, fmt.Errorf("write: %w", err)
-	}
-
-	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	if !scanner.Scan() {
-		return nil, fmt.Errorf("no response from daemon")
-	}
-
-	var dresp daemonResponse
-	if err := json.Unmarshal(scanner.Bytes(), &dresp); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
-	}
-	if dresp.Error != nil {
-		return nil, fmt.Errorf("[%s] %s", dresp.Error.Code, dresp.Error.Message)
-	}
-
-	respHeader := make(http.Header)
-	for k, v := range dresp.Headers {
-		respHeader.Set(k, v)
-	}
-	return &http.Response{
-		StatusCode: dresp.Status,
-		Status:     dresp.StatusText,
-		Header:     respHeader,
-		Body:       io.NopCloser(strings.NewReader(dresp.Body)),
-	}, nil
-}
 
 // --- Helpers ---
 
@@ -498,12 +424,26 @@ func TestAllServices(t *testing.T) {
 	}
 	defer srv.Stop()
 
-	// Run all service tests
+	// Run all service tests using clients/go client library
+	client := &keyrest.Client{SocketPath: socketPath}
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			fullURL := baseURL + tc.urlPath
 
-			resp, err := sendRequest(socketPath, tc.method, fullURL, tc.headers, tc.body)
+			var bodyReader io.Reader
+			if tc.body != "" {
+				bodyReader = strings.NewReader(tc.body)
+			}
+			req, err := keyrest.NewRequest(tc.method, fullURL, bodyReader)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+
+			resp, err := client.Do(req)
 			if err != nil {
 				t.Fatalf("request failed: %v", err)
 			}
