@@ -330,8 +330,8 @@ A curl wrapper command. It accepts the same arguments as curl, resolves key-rest
 - `socat` (for curl wrapper client)
 
 ```bash
+sudo apt install snapd socat
 sudo snap install go --classic
-sudo apt install socat
 ```
 
 # REST API Usage Examples
