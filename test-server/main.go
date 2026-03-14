@@ -651,6 +651,18 @@ func main() {
 		})
 	}
 
+	// Echo handler — reflects all request headers in the response body
+	mux.HandleFunc("/echo/", func(w http.ResponseWriter, r *http.Request) {
+		if *logRequest {
+			logHTTPRequest("echo", r)
+		}
+		headers := make(map[string]string)
+		for name, vals := range r.Header {
+			headers[name] = vals[0]
+		}
+		writeJSON(w, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
+	})
+
 	// Root handler
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if *logRequest {
