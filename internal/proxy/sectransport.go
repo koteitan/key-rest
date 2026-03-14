@@ -17,6 +17,16 @@ import (
 	"github.com/koteitan/key-rest/internal/uri"
 )
 
+// containsCRLF checks if a byte slice contains \r or \n (CRLF injection).
+func containsCRLF(b []byte) bool {
+	for _, c := range b {
+		if c == '\r' || c == '\n' {
+			return true
+		}
+	}
+	return false
+}
+
 // secureTransport implements http.RoundTripper with delayed key replacement.
 type secureTransport struct {
 	resolver     uri.Resolver
@@ -93,6 +103,16 @@ func (t *secureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 					crypto.ZeroClear(h.value)
 				}
 				return nil, fmt.Errorf("failed to resolve header %s: %w", key, err)
+			}
+			// Reject CRLF injection in resolved header values
+			if containsCRLF(resolved) {
+				crypto.ZeroClear(resolved)
+				crypto.ZeroClear(resolvedBody)
+				crypto.ZeroClear(resolvedURI)
+				for _, h := range resolvedHeaders {
+					crypto.ZeroClear(h.value)
+				}
+				return nil, fmt.Errorf("CRLF injection detected in header %s", key)
 			}
 			resolvedHeaders = append(resolvedHeaders, resolvedHeader{key, resolved})
 		}

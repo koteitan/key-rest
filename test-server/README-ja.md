@@ -33,6 +33,17 @@ go run ./test-server/
 -gen-cert  自己署名証明書を強制再生成
 ```
 
+## 証明書の設定
+
+test-server は自己署名証明書を生成します。key-rest-daemon は test-server に HTTPS リクエストを送るため、この証明書を信頼する必要があります。**daemon 起動前に** `SSL_CERT_FILE` 環境変数を設定してください:
+
+```bash
+export SSL_CERT_FILE=test-server/cert.pem
+./key-rest start
+```
+
+システムテストではこれを自動的に設定しています。手動でローカルテストする場合は、生成された `cert.pem` を指す `SSL_CERT_FILE` を daemon 起動前に export してください。
+
 ## 対応サービス
 
 | サービス | 認証方式 | テスト URL |

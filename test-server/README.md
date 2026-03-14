@@ -33,6 +33,17 @@ Options:
 -gen-cert  Force regenerate self-signed certificate
 ```
 
+## Certificate Configuration
+
+The test-server generates a self-signed certificate. Since key-rest-daemon makes HTTPS requests to the test-server, it must trust this certificate. Set the `SSL_CERT_FILE` environment variable **before starting the daemon**:
+
+```bash
+export SSL_CERT_FILE=test-server/cert.pem
+./key-rest start
+```
+
+The system tests set this automatically. If you run the test-server manually for local testing, make sure to export `SSL_CERT_FILE` pointing to the generated `cert.pem` before starting the daemon.
+
 ## Services
 
 | Service | Auth Method | Test URL |

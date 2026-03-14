@@ -13,17 +13,19 @@ import (
 )
 
 const maxRequestSize = 10 * 1024 * 1024 // 10 MB
+const maxConcurrentConns = 64
 
 // ReloadFunc is called when a "reload" request is received.
 type ReloadFunc func() error
 
 // Server listens on a Unix domain socket and handles proxy requests.
 type Server struct {
-	socketPath   string
-	proxy        *proxy.Proxy
-	listener     net.Listener
-	wg           sync.WaitGroup
-	quit         chan struct{}
+	socketPath    string
+	proxy         *proxy.Proxy
+	listener      net.Listener
+	wg            sync.WaitGroup
+	quit          chan struct{}
+	connSem       chan struct{} // semaphore for limiting concurrent connections
 	ReloadHandler ReloadFunc
 }
 
@@ -33,6 +35,7 @@ func New(socketPath string, p *proxy.Proxy) *Server {
 		socketPath: socketPath,
 		proxy:      p,
 		quit:       make(chan struct{}),
+		connSem:    make(chan struct{}, maxConcurrentConns),
 	}
 }
 
@@ -85,9 +88,19 @@ func (s *Server) acceptLoop() {
 			}
 		}
 
+		// Limit concurrent connections
+		select {
+		case s.connSem <- struct{}{}:
+		default:
+			// At capacity — reject connection
+			conn.Close()
+			continue
+		}
+
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer func() { <-s.connSem }()
 			s.handleConnection(conn)
 		}()
 	}

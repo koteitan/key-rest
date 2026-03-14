@@ -76,6 +76,11 @@ func (d *Daemon) Start(passphrase []byte) error {
 		return fmt.Errorf("daemon already running (PID %d)", pid)
 	}
 
+	// Disable core dumps to prevent credential leakage
+	if err := syscall.Setrlimit(syscall.RLIMIT_CORE, &syscall.Rlimit{Cur: 0, Max: 0}); err != nil {
+		return fmt.Errorf("failed to disable core dumps: %w", err)
+	}
+
 	// Decrypt all keys
 	if err := d.store.DecryptAll(passphrase); err != nil {
 		return fmt.Errorf("failed to decrypt keys: %w", err)

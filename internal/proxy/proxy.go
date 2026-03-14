@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"net/url"
+
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/uri"
 )
@@ -107,6 +109,12 @@ func (p *Proxy) Handle(req *Request) *Response {
 		return errorResponse("INSECURE_REQUEST", "only HTTPS URLs are allowed (got HTTP)")
 	}
 
+	// Reject URLs with userinfo (e.g., https://api.example.com@evil.com/)
+	// to prevent URL parse inconsistency attacks
+	if parsed, err := url.Parse(req.URL); err == nil && parsed.User != nil {
+		return errorResponse("INSECURE_REQUEST", "URLs with userinfo (@) are not allowed")
+	}
+
 	// Validate all key-rest:// URIs (url_prefix, field restrictions) without resolving
 	if err := p.validateField(req.URL, "url", req.URL); err != nil {
 		return toErrorResponse(err)
@@ -154,17 +162,21 @@ func (p *Proxy) Handle(req *Request) *Response {
 		return errorResponse("HTTP_ERROR", "failed to read response body: "+err.Error())
 	}
 
-	// Build response headers
+	// Reverse-substitute credential values back to key-rest:// URIs in response
+	// to prevent credential leakage through APIs that echo back auth data
+	respBodyStr := p.maskCredentials(string(respBody))
+
+	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
-		respHeaders[k] = resp.Header.Get(k)
+		respHeaders[k] = p.maskCredentials(resp.Header.Get(k))
 	}
 
 	return &Response{
 		Status:     resp.StatusCode,
 		StatusText: resp.Status,
 		Headers:    respHeaders,
-		Body:       string(respBody),
+		Body:       respBodyStr,
 	}
 }
 
@@ -248,6 +260,18 @@ func hasURLPrefix(requestURL, prefix string) bool {
 	}
 	next := requestURL[len(prefix)]
 	return next == '/' || next == '?' || next == '#'
+}
+
+// maskCredentials replaces any decrypted key values in s with their key-rest:// URIs.
+func (p *Proxy) maskCredentials(s string) string {
+	p.store.RLock()
+	defer p.store.RUnlock()
+	for _, dk := range p.store.Decrypted() {
+		if len(dk.Value) > 0 {
+			s = strings.ReplaceAll(s, string(dk.Value), "key-rest://"+dk.URI)
+		}
+	}
+	return s
 }
 
 func errorResponse(code, message string) *Response {

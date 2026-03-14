@@ -279,6 +279,16 @@ func (s *Store) Lookup(uri string) *DecryptedKey {
 	return nil
 }
 
+// RLock acquires a read lock on the store.
+func (s *Store) RLock() { s.mu.RLock() }
+
+// RUnlock releases a read lock on the store.
+func (s *Store) RUnlock() { s.mu.RUnlock() }
+
+// Decrypted returns the in-memory decrypted keys slice.
+// The caller must hold at least a read lock (via RLock).
+func (s *Store) Decrypted() []DecryptedKey { return s.decrypted }
+
 // ClearAll zeros out all decrypted keys in memory.
 // Called when the daemon stops.
 func (s *Store) ClearAll() {
