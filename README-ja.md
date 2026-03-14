@@ -328,21 +328,53 @@ curl のラッパーコマンドです。curl と同じ引数を受け取り、k
 # 必要要件
 
 - Linux (WSL2 で動作確認済み)
+- Go 1.24+
 - `socat` (curl ラッパークライアント用)
 
-# インストール
-
-[Releases](https://github.com/koteitan/key-rest/releases) ページからバイナリをダウンロードするか、ソースからビルドしてください（下記参照）。
+```bash
+sudo snap install go --classic
+sudo apt install socat
+```
 
 # REST API の使用例
 
 [examples/](examples/README-ja.md) を参照してください。
 
+# テスト
+
+```
+make test                    # 全テスト実行
+├── make test-unit           # ユニットテスト
+│   ├── make test-go         #   Go (internal + client)
+│   ├── make test-python     #   Python client
+│   └── make test-node       #   Node.js client
+└── make test-system         # システムテスト (全26サービス end-to-end)
+    ├── go                   #   go test 経由
+    ├── curl                 #   key-rest-curl 経由
+    ├── python               #   key_rest.requests 経由
+    └── node                 #   node:net Unix socket 経由
+```
+
+| コマンド | 実行内容 |
+|---|---|
+| `make test` | 以下の全テスト |
+| `make test-unit` | `test-go` + `test-python` + `test-node` |
+| `make test-go` | `go test ./... -count=1` (system-test/ を除外) |
+| `make test-python` | `cd clients/python && python3 -m unittest test_requests -v` |
+| `make test-node` | `cd clients/node && npm run build && npm test` |
+| `make test-system` | 以下の4つのシステムテスト |
+| | `cd system-test/go && go test -v -count=1` |
+| | `system-test/curl/system-test.sh` |
+| | `python3 system-test/python/system_test.py` |
+| | `node system-test/node/system_test.mjs` |
+
+システムテストは [test-server/](test-server/README-ja.md)（全26サービスの認証を模倣するモック HTTPS サーバー）を使用します。詳細は [system-test/](system-test/README-ja.md) を参照してください。
+
 # 開発者向け
 
 ## ビルドに必要なもの
 
-- Go 1.22 以降
+- Go 1.24 以降
 - Node.js 18+ と TypeScript (Node.js クライアント用)
 - Python 3.9+ (Python クライアント用)
 
@@ -355,8 +387,3 @@ make build
 ```
 
 プロジェクトルートに `key-rest` バイナリが作成されます。
-
-テストの実行:
-```bash
-make test
-```

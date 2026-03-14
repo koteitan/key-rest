@@ -326,11 +326,13 @@ A curl wrapper command. It accepts the same arguments as curl, resolves key-rest
 # Requirements
 
 - Linux (tested on WSL2)
+- Go 1.24+
 - `socat` (for curl wrapper client)
 
-# Install
-
-Download the binary from the [Releases](https://github.com/koteitan/key-rest/releases) page, or build from source (see below).
+```bash
+sudo snap install go --classic
+sudo apt install socat
+```
 
 # REST API Usage Examples
 
@@ -338,13 +340,39 @@ See [examples/](examples/README.md).
 
 # Testing
 
-See [test-server/](test-server/README.md) for the mock API test server that mimics all 26 supported services.
+```
+make test                    # Run all tests
+├── make test-unit           # Unit tests
+│   ├── make test-go         #   Go (internal + client)
+│   ├── make test-python     #   Python client
+│   └── make test-node       #   Node.js client
+└── make test-system         # System tests (all 26 services end-to-end)
+    ├── go                   #   via go test
+    ├── curl                 #   via key-rest-curl
+    ├── python               #   via key_rest.requests
+    └── node                 #   via node:net Unix socket
+```
+
+| Command | What it runs |
+|---|---|
+| `make test` | All tests below |
+| `make test-unit` | `test-go` + `test-python` + `test-node` |
+| `make test-go` | `go test ./... -count=1` (excludes system-test/) |
+| `make test-python` | `cd clients/python && python3 -m unittest test_requests -v` |
+| `make test-node` | `cd clients/node && npm run build && npm test` |
+| `make test-system` | All 4 system tests below |
+| | `cd system-test/go && go test -v -count=1` |
+| | `system-test/curl/system-test.sh` |
+| | `python3 system-test/python/system_test.py` |
+| | `node system-test/node/system_test.mjs` |
+
+System tests use [test-server/](test-server/README.md) — a mock HTTPS server that mimics the authentication of all 26 supported services. See [system-test/](system-test/README.md) for details.
 
 # For Developers
 
 ## Requirements for Build
 
-- Go 1.22 or later
+- Go 1.24 or later
 - Node.js 18+ and TypeScript (for Node.js client)
 - Python 3.9+ (for Python client)
 
@@ -357,8 +385,3 @@ make build
 ```
 
 The `key-rest` binary will be created in the project root.
-
-To run tests:
-```bash
-make test
-```
