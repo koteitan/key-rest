@@ -393,6 +393,56 @@ func TestHandleBase64TransformMasking(t *testing.T) {
 	}
 }
 
+func TestHandleJSONEscapedMasking(t *testing.T) {
+	// Upstream echoes back the Authorization header in a JSON response,
+	// which JSON-escapes special characters in the credential
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		// json.Marshal will escape " and \ in auth value
+		body, _ := json.Marshal(map[string]string{"Authorization": auth})
+		w.Write(body)
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	// Credential with characters that get JSON-escaped
+	store.Add("user1/echo/jsonesc", ts.URL+"/", false, false, []byte(`ULTRA"SECRET\\X`), pass)
+	store.DecryptAll(pass)
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
+
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    ts.URL + "/anything",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/echo/jsonesc",
+		},
+	})
+
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %s", resp.Error.Message)
+	}
+
+	// Raw credential must NOT appear
+	if strings.Contains(resp.Body, `ULTRA"SECRET\\X`) {
+		t.Fatal("raw credential leaked in response body")
+	}
+	// JSON-escaped form must NOT appear
+	if strings.Contains(resp.Body, `ULTRA\"SECRET\\\\X`) {
+		t.Fatal("JSON-escaped credential leaked in response body (issue #7)")
+	}
+	// key-rest:// URI should appear instead
+	if !strings.Contains(resp.Body, "key-rest://user1/echo/jsonesc") {
+		t.Fatal("credential was not reverse-substituted in response body")
+	}
+}
+
 func TestHandleInvalidType(t *testing.T) {
 	p, _ := setupProxy(t)
 	resp := p.Handle(&Request{

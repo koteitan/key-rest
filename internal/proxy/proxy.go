@@ -270,12 +270,22 @@ func hasURLPrefix(requestURL, prefix string) bool {
 }
 
 // maskCredentials replaces any decrypted key values in s with their key-rest:// URIs.
+// It also masks JSON-escaped forms to prevent exfiltration via escaped reflection.
 func (p *Proxy) maskCredentials(s string) string {
 	p.store.RLock()
 	defer p.store.RUnlock()
 	for _, dk := range p.store.Decrypted() {
 		if len(dk.Value) > 0 {
-			s = strings.ReplaceAll(s, string(dk.Value), "key-rest://"+dk.URI)
+			raw := string(dk.Value)
+			replacement := "key-rest://" + dk.URI
+			// Mask JSON-escaped form first (longer, more specific)
+			jsonBytes, _ := json.Marshal(raw)
+			jsonEscaped := string(jsonBytes[1 : len(jsonBytes)-1])
+			if jsonEscaped != raw {
+				s = strings.ReplaceAll(s, jsonEscaped, replacement)
+			}
+			// Then mask raw form
+			s = strings.ReplaceAll(s, raw, replacement)
 		}
 	}
 	return s
