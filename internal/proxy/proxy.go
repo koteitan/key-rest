@@ -186,13 +186,15 @@ func (p *Proxy) Handle(req *Request) *Response {
 	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
 	respBodyStr = p.maskCredentials(respBodyStr)
 	respBodyStr = p.maskTruncatedKeys(respBodyStr)
+	respBodyStr = p.maskPercentEncoded(respBodyStr)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
 		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
 		v = p.maskCredentials(v)
-		respHeaders[k] = p.maskTruncatedKeys(v)
+		v = p.maskTruncatedKeys(v)
+		respHeaders[k] = p.maskPercentEncoded(v)
 	}
 
 	return &Response{
@@ -495,6 +497,25 @@ func (p *Proxy) maskTruncatedKeys(s string) string {
 			regexp.QuoteMeta(raw[:2]) + `[^\s"]*?\*{4,}` + regexp.QuoteMeta(raw[len(raw)-4:]),
 		)
 		s = re.ReplaceAllString(s, "key-rest://"+dk.URI)
+	}
+	return s
+}
+
+// maskPercentEncoded detects credentials hidden in percent-encoded form.
+// If the response contains '%', it URL-decodes the body and retries masking.
+// If masking finds credentials in the decoded form, the decoded+masked version
+// is returned; otherwise the original is kept unchanged.
+func (p *Proxy) maskPercentEncoded(s string) string {
+	if !strings.Contains(s, "%") {
+		return s
+	}
+	decoded, err := url.QueryUnescape(s)
+	if err != nil || decoded == s {
+		return s
+	}
+	masked := p.maskCredentials(decoded)
+	if masked != decoded {
+		return masked
 	}
 	return s
 }

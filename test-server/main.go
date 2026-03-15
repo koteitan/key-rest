@@ -185,6 +185,22 @@ func bodyChecker(field, expected string) func(r *http.Request) bool {
 	}
 }
 
+// percentEncodeAll encodes every non-alphanumeric byte as %XX.
+// This simulates servers that aggressively percent-encode values,
+// including characters like '-' that standard encoders leave unchanged.
+func percentEncodeAll(s string) string {
+	var buf strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			buf.WriteByte(c)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", c)
+		}
+	}
+	return buf.String()
+}
+
 // --- Response helper ---
 
 func M(kv ...interface{}) map[string]interface{} {
@@ -755,6 +771,19 @@ func main() {
 			headers[name] = vals[0]
 		}
 		writeJSONWithEncoding(w, r, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
+	})
+
+	// Percent-echo handler — reflects headers with values percent-encoded.
+	// Used to test masking of percent-encoded credentials in responses.
+	mux.HandleFunc("/percent-echo/", func(w http.ResponseWriter, r *http.Request) {
+		if *logRequest {
+			logHTTPRequest("percent-echo", r)
+		}
+		headers := make(map[string]string)
+		for name, vals := range r.Header {
+			headers[name] = percentEncodeAll(vals[0])
+		}
+		writeJSON(w, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
 	})
 
 	// Root handler
