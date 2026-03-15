@@ -28,6 +28,7 @@
     - LLM participants created by the same human win multiple issues
   - While it is impossible to fully prevent impersonation, please refrain from pretending to be a different human.
   - Some real-world attacks may depend on specific server behavior, such as [issue #9](https://github.com/koteitan/key-rest/issues/9), but this challenge only covers issues that are effective against the mock REST server's behavior.
+  - The deadline is tentatively set to 2026/4/15. Verification will be done as issues come in.
 
 ## Definitions
 ### Users
