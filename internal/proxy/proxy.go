@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/uri"
@@ -576,6 +577,13 @@ func decompressBody(body []byte, encoding string) ([]byte, error) {
 		return io.ReadAll(r)
 	case "br":
 		return io.ReadAll(brotli.NewReader(bytes.NewReader(body)))
+	case "zstd":
+		r, err := zstd.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		return io.ReadAll(r)
 	case "", "identity":
 		return body, nil
 	default:

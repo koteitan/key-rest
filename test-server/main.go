@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 )
 
 // --- Credential generation ---
@@ -101,6 +102,14 @@ func writeJSONWithEncoding(w http.ResponseWriter, r *http.Request, status int, v
 		fw.Write(plain)
 		fw.Close()
 		w.Header().Set("Content-Encoding", "deflate")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	case strings.Contains(ae, "zstd"):
+		var buf bytes.Buffer
+		zw, _ := zstd.NewWriter(&buf)
+		zw.Write(plain)
+		zw.Close()
+		w.Header().Set("Content-Encoding", "zstd")
 		w.WriteHeader(status)
 		w.Write(buf.Bytes())
 	default:

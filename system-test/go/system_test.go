@@ -613,6 +613,7 @@ func TestCompressionMasking(t *testing.T) {
 		{"gzip", "gzip"},
 		{"deflate", "deflate"},
 		{"brotli", "br"},
+		{"zstd", "zstd"},
 	}
 
 	for _, tc := range encodings {
