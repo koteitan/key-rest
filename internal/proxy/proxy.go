@@ -2,6 +2,9 @@
 package proxy
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -161,11 +164,18 @@ func (p *Proxy) Handle(req *Request) *Response {
 	}
 	defer resp.Body.Close()
 
-	// Read response body
+	// Read and decompress response body to ensure masking operates on plaintext.
+	// Without decompression, compressed responses bypass credential masking.
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return errorResponse("HTTP_ERROR", "failed to read response body: "+err.Error())
 	}
+	respBody, err = decompressBody(respBody, resp.Header.Get("Content-Encoding"))
+	if err != nil {
+		return errorResponse("HTTP_ERROR", "failed to decompress response body: "+err.Error())
+	}
+	// Remove Content-Encoding since body is now decompressed
+	resp.Header.Del("Content-Encoding")
 
 	// Reverse-substitute credential values back to key-rest:// URIs in response
 	// to prevent credential leakage through APIs that echo back auth data.
@@ -341,6 +351,28 @@ func (p *Proxy) maskTransformOutputs(s string, outputs map[string]string) string
 		s = strings.ReplaceAll(s, resolved, original)
 	}
 	return s
+}
+
+// decompressBody decompresses the response body based on Content-Encoding.
+// Returns the original body unchanged if no encoding or unsupported encoding.
+func decompressBody(body []byte, encoding string) ([]byte, error) {
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "gzip", "x-gzip":
+		r, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		return io.ReadAll(r)
+	case "deflate":
+		r := flate.NewReader(bytes.NewReader(body))
+		defer r.Close()
+		return io.ReadAll(r)
+	case "", "identity":
+		return body, nil
+	default:
+		return body, nil
+	}
 }
 
 func errorResponse(code, message string) *Response {
