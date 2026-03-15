@@ -651,6 +651,95 @@ func TestCompressionMasking(t *testing.T) {
 	}
 }
 
+// TestOpenAIPartialKeyMasking verifies that truncated API keys in OpenAI-style
+// error messages are masked. OpenAI returns errors like:
+// "Incorrect API key provided: sk-test-****...abcd"
+// where "abcd" is the real suffix. This is a regression test for issue #11.
+func TestOpenAIPartialKeyMasking(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	creds, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	// Register the real OpenAI key
+	openaiKey := findCred(creds, "openai", "api-key")
+	if openaiKey == "" {
+		t.Fatal("openai credential not found")
+	}
+	if err := store.Add("t/openai/api-key", baseURL+"/openai/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(openaiKey), passphrase); err != nil {
+		t.Fatalf("add key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	// Send a request with a WRONG key to trigger the OpenAI error response
+	// that includes the truncated real key.
+	req, err := keyrest.NewRequest("POST", baseURL+"/openai/v1/chat/completions", strings.NewReader(`{"model":"gpt-4o"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer WRONG_KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+
+	// The last 4 chars of the real key MUST NOT appear in the response
+	suffix := openaiKey[len(openaiKey)-4:]
+	if strings.Contains(bodyStr, suffix) {
+		t.Fatalf("partial credential (suffix %q) leaked in error response:\n%s", suffix, truncate(body, 500))
+	}
+
+	// The masked form should be replaced with key-rest:// URI
+	if !strings.Contains(bodyStr, "key-rest://t/openai/api-key") {
+		t.Fatalf("truncated key was not replaced with key-rest:// URI:\n%s", truncate(body, 500))
+	}
+
+	t.Logf("OK: partial key masked in OpenAI error response")
+}
+
 func truncate(b []byte, max int) string {
 	if len(b) <= max {
 		return string(b)

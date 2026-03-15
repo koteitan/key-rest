@@ -197,11 +197,34 @@ func M(kv ...interface{}) map[string]interface{} {
 
 // --- OpenAI-compatible response factories ---
 
-func openaiError() func(w http.ResponseWriter) {
+// truncateKey mimics OpenAI's error format: prefix + asterisks + last 4 chars.
+// e.g., "sk-test-abc123" → "sk-test-******bc23"
+func truncateKey(key string) string {
+	if len(key) < 8 {
+		return strings.Repeat("*", len(key))
+	}
+	// Find the end of the prefix portion (up to and including the last hyphen
+	// before the secret part, but at least 3 chars)
+	prefixEnd := 0
+	for i, c := range key {
+		if c == '-' {
+			prefixEnd = i + 1
+		}
+	}
+	if prefixEnd < 3 {
+		prefixEnd = 3
+	}
+	if prefixEnd > len(key)-4 {
+		prefixEnd = len(key) - 4
+	}
+	return key[:prefixEnd] + strings.Repeat("*", len(key)-prefixEnd-4) + key[len(key)-4:]
+}
+
+func openaiError(key string) func(w http.ResponseWriter) {
 	return func(w http.ResponseWriter) {
 		writeJSON(w, 401, M(
 			"error", M(
-				"message", "Incorrect API key provided.",
+				"message", fmt.Sprintf("Incorrect API key provided: %s. You can find your API key at https://platform.openai.com/account/api-keys.", truncateKey(key)),
 				"type", "invalid_request_error",
 				"param", nil,
 				"code", "invalid_api_key",
@@ -245,7 +268,7 @@ func buildServices() (map[string]*mockService, []credEntry) {
 		add(name, &mockService{
 			creds:     []credEntry{{label: "api-key", value: key}},
 			checkAuth: bearerChecker(key),
-			onFail:    openaiError(),
+			onFail:    openaiError(key),
 			onOK:      openaiOK(model),
 		})
 	}

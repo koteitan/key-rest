@@ -12,13 +12,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sort"
-
-	"github.com/andybalholm/brotli"
 	"strings"
 	"time"
 
-	"net/url"
+	"github.com/andybalholm/brotli"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/uri"
@@ -181,15 +181,18 @@ func (p *Proxy) Handle(req *Request) *Response {
 
 	// Reverse-substitute credential values back to key-rest:// URIs in response
 	// to prevent credential leakage through APIs that echo back auth data.
-	// Transform outputs (e.g., base64) are masked first, then raw credentials.
+	// Transform outputs (e.g., base64) are masked first, then raw credentials,
+	// then partial credential patterns (e.g., OpenAI truncated keys in errors).
 	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
 	respBodyStr = p.maskCredentials(respBodyStr)
+	respBodyStr = p.maskOpenAIPartialKeys(respBodyStr)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
 		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
-		respHeaders[k] = p.maskCredentials(v)
+		v = p.maskCredentials(v)
+		respHeaders[k] = p.maskOpenAIPartialKeys(v)
 	}
 
 	return &Response{
@@ -450,6 +453,35 @@ func (p *Proxy) maskCredentials(s string) string {
 			// Then mask raw form
 			s = strings.ReplaceAll(s, raw, replacement)
 		}
+	}
+	return s
+}
+
+// maskOpenAIPartialKeys masks truncated API key patterns that OpenAI includes
+// in error messages (e.g., "sk-test-************************************abcd"
+// where "abcd" is the real suffix of the credential).
+// Only applies to keys whose url_prefix contains https://api.openai.com/ or https://localhost.
+func (p *Proxy) maskOpenAIPartialKeys(s string) string {
+	p.store.RLock()
+	decrypted := p.store.Decrypted()
+	p.store.RUnlock()
+
+	for _, dk := range decrypted {
+		if len(dk.Value) < 8 {
+			continue
+		}
+		if !strings.Contains(dk.URLPrefix, "https://api.openai.com/") &&
+			!strings.Contains(dk.URLPrefix, "https://localhost") {
+			continue
+		}
+		raw := string(dk.Value)
+		// Pattern: first 2+ chars of key, then non-whitespace chars leading into
+		// 4+ asterisks, then the last 4 chars of the key.
+		// e.g., "sk-test-************************************abcd"
+		re := regexp.MustCompile(
+			regexp.QuoteMeta(raw[:2]) + `[^\s"]*?\*{4,}` + regexp.QuoteMeta(raw[len(raw)-4:]),
+		)
+		s = re.ReplaceAllString(s, "key-rest://"+dk.URI)
 	}
 	return s
 }
