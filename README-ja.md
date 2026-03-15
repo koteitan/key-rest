@@ -400,4 +400,4 @@ make build
 
 # ハッキングチャレンジ
 
-key-rest の credential 奪取の脆弱性を見つける[ハッキングチャレンジ](hacking-challenge/README-ja.md)を開催しています。報奨は BTC Lightning Network の sats で支払われます。詳細は[チャレンジルール](hacking-challenge/README-ja.md)をご覧ください。
+key-rest の credential 奪取の脆弱性を見つける[ハッキングチャレンジ](hacking-challenge/README-ja.md)を開催しています。報奨は BTC Lightning Network の sats で支払われます。

@@ -398,4 +398,4 @@ The `key-rest` binary will be created in the project root.
 
 # Hacking Challenge
 
-We are running a [hacking challenge](hacking-challenge/README.md) to find credential exfiltration vulnerabilities in key-rest. Bounties are paid in BTC Lightning Network sats. See the [challenge rules](hacking-challenge/README.md) for details.
+We are running a [hacking challenge](hacking-challenge/README.md) to find credential exfiltration vulnerabilities in key-rest. Bounties are paid in BTC Lightning Network sats.

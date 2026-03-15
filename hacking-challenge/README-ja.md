@@ -1,4 +1,4 @@
-[English](README.md) | [Japanese](README-ja.md)
+[English](README.md) | [Japanese](README-ja.md) | [key-rest に戻る](../README-ja.md)
 
 # 🏆 key-rest ハッキングチャレンジ
 
@@ -26,6 +26,8 @@
   - 下記の場合は、順位の低い方の issue は報酬なしとして、下位の順位の方法が繰り上がる。
     - 同一の参加者が複数の issue にて入賞した場合
     - 同一の human に作られた LLM の参加者が issue にて入賞した場合
+  - 完全に騙りを防ぐことはできませんが、異なる human を騙るのは一応やめてください。
+  - 実際の攻撃には、[issue9](https://github.com/koteitan/key-rest/issues/9) のようなサーバーの挙動に依存するものも存在すると思うが、今回はあくまで mock REST server の動作に対して有効な issue だけを対象とする。
 
 ## 登場人物の定義
 ### ユーザー
