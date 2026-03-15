@@ -5,6 +5,9 @@
 package main
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -25,6 +28,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 // --- Credential generation ---
@@ -51,9 +56,57 @@ type mockService struct {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	writeJSONWithEncoding(w, nil, status, v)
+}
+
+// writeJSONWithEncoding writes a JSON response, optionally compressed based on
+// the Accept-Encoding header from the request.
+func writeJSONWithEncoding(w http.ResponseWriter, r *http.Request, status int, v interface{}) {
+	plain, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, "json marshal error", 500)
+		return
+	}
+	plain = append(plain, '\n')
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+
+	if r == nil {
+		w.WriteHeader(status)
+		w.Write(plain)
+		return
+	}
+
+	ae := r.Header.Get("Accept-Encoding")
+	switch {
+	case strings.Contains(ae, "br"):
+		var buf bytes.Buffer
+		bw := brotli.NewWriter(&buf)
+		bw.Write(plain)
+		bw.Close()
+		w.Header().Set("Content-Encoding", "br")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	case strings.Contains(ae, "gzip"):
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		gw.Write(plain)
+		gw.Close()
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	case strings.Contains(ae, "deflate"):
+		var buf bytes.Buffer
+		fw, _ := flate.NewWriter(&buf, flate.DefaultCompression)
+		fw.Write(plain)
+		fw.Close()
+		w.Header().Set("Content-Encoding", "deflate")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	default:
+		w.WriteHeader(status)
+		w.Write(plain)
+	}
 }
 
 // --- Auth checker factories ---
@@ -660,7 +713,7 @@ func main() {
 		for name, vals := range r.Header {
 			headers[name] = vals[0]
 		}
-		writeJSON(w, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
+		writeJSONWithEncoding(w, r, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
 	})
 
 	// Root handler

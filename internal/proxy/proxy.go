@@ -13,6 +13,8 @@ import (
 	"io"
 	"net/http"
 	"sort"
+
+	"github.com/andybalholm/brotli"
 	"strings"
 	"time"
 
@@ -506,6 +508,8 @@ func decompressBody(body []byte, encoding string) ([]byte, error) {
 		r := flate.NewReader(bytes.NewReader(body))
 		defer r.Close()
 		return io.ReadAll(r)
+	case "br":
+		return io.ReadAll(brotli.NewReader(bytes.NewReader(body)))
 	case "", "identity":
 		return body, nil
 	default:

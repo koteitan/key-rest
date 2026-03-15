@@ -549,6 +549,108 @@ func TestResponseMasking(t *testing.T) {
 	t.Logf("OK: credential masked in echo response (%d bytes)", len(body))
 }
 
+// TestCompressionMasking verifies that credential masking works correctly
+// when the upstream server returns compressed responses.
+// This is a regression test for issue #10: brotli-compressed responses
+// bypass credential masking because decompressBody does not support brotli.
+func TestCompressionMasking(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	creds, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	echoKeyValue := findCred(creds, "openai", "api-key")
+	if echoKeyValue == "" {
+		t.Fatal("credential not found for compression test")
+	}
+	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(echoKeyValue), passphrase); err != nil {
+		t.Fatalf("add echo key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	encodings := []struct {
+		name           string
+		acceptEncoding string
+	}{
+		{"identity", ""},
+		{"gzip", "gzip"},
+		{"deflate", "deflate"},
+		{"brotli", "br"},
+	}
+
+	for _, tc := range encodings {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := keyrest.NewRequest("GET", baseURL+"/echo/test", nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+			if tc.acceptEncoding != "" {
+				req.Header.Set("Accept-Encoding", tc.acceptEncoding)
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+
+			body, _ := io.ReadAll(resp.Body)
+
+			if resp.StatusCode != 200 {
+				t.Fatalf("expected 200, got %d\nbody: %s", resp.StatusCode, truncate(body, 500))
+			}
+
+			// All encodings MUST be decompressed and masked.
+			// If this fails for brotli, it confirms issue #10.
+			if strings.Contains(string(body), echoKeyValue) {
+				t.Fatalf("credential leaked in %s response — masking failed", tc.name)
+			}
+			if !strings.Contains(string(body), "key-rest://") {
+				t.Fatalf("credential not reverse-substituted in %s response — decompression or masking failed", tc.name)
+			}
+			t.Logf("OK: credential masked in %s response (%d bytes)", tc.name, len(body))
+		})
+	}
+}
+
 func truncate(b []byte, max int) string {
 	if len(b) <= max {
 		return string(b)

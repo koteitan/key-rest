@@ -8,6 +8,9 @@ require (
 	golang.org/x/term v0.40.0
 )
 
-require golang.org/x/sys v0.41.0 // indirect
+require (
+	github.com/andybalholm/brotli v1.2.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+)
 
 replace github.com/koteitan/key-rest/go => ./clients/go
