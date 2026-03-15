@@ -21,22 +21,7 @@ const fetch = createFetch();
 
 # ブロック図
 
-```mermaid
-graph LR
-    A[LLM agent]
-    B[key-rest client library]
-    D[key-rest-daemon]
-    S[services]
-
-    A -->|"request with key-rest:// URI"| B
-    B -->|"request with key-rest:// URI"| D
-    D -->|"request with real credentials"| S
-    S -->|response| D
-    D -->|response| B
-    B -->|response| A
-    K[(APP KEY encrypted)]
-    K -->|decrypt| D
-```
+![ブロック図](assets/block-diagram.svg)
 
 # シーケンス図
 
@@ -412,3 +397,7 @@ make build
 ```
 
 プロジェクトルートに `key-rest` バイナリが作成されます。
+
+# ハッキングチャレンジ
+
+key-rest の credential 奪取の脆弱性を見つける[ハッキングチャレンジ](hacking-challenge/README-ja.md)を開催しています。報奨は BTC Lightning Network の sats で支払われます。詳細は[チャレンジルール](hacking-challenge/README-ja.md)をご覧ください。

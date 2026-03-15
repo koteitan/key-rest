@@ -1,0 +1,39 @@
+digraph block_diagram {
+    rankdir=LR
+    ordering=out
+    fontname="sans-serif"
+    node [fontname="sans-serif", fontsize=11]
+    edge [fontname="sans-serif", fontsize=9]
+
+    subgraph cluster_not_visible {
+        label="Credential not visible"
+        style=dashed
+        color="#888888"
+        fontcolor="#888888"
+        fontsize=10
+
+        A [label="LLM agent", shape=box, style=filled, fillcolor="#e8f4fd"]
+        B [label="key-rest\nclient library", shape=box, style=filled, fillcolor="#e8f4fd"]
+    }
+
+    subgraph cluster_visible {
+        label="Credential visible"
+        style=dashed
+        color="#cc4444"
+        fontcolor="#cc4444"
+        fontsize=10
+
+        D [label="key-rest-daemon", shape=box, style=filled, fillcolor="#fce4ec"]
+        S [label="services", shape=box, style=filled, fillcolor="#fce4ec"]
+        K [label="APP KEY\nencrypted", shape=cylinder, style=filled, fillcolor="#fff3e0"]
+
+        K -> D [label="decrypt", style=dotted, constraint=false]
+    }
+
+    A -> B [label="request with\nkey-rest:// URI"]
+    B -> D [label="request with\nkey-rest:// URI"]
+    D -> S [label="request with\nreal credentials"]
+    B -> A [label="response", style=dashed, constraint=false]
+    D -> B [label="response", style=dashed, constraint=false]
+    S -> D [label="response", style=dashed, constraint=false]
+}

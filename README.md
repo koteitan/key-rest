@@ -19,22 +19,7 @@ Then key-rest replaces `key-rest://user1/claude/api-key` with `sk-ant-api03-abcd
 
 # Block Diagram
 
-```mermaid
-graph LR
-    A[LLM agent]
-    B[key-rest client library]
-    D[key-rest-daemon]
-    S[services]
-
-    A -->|"request with key-rest:// URI"| B
-    B -->|"request with key-rest:// URI"| D
-    D -->|"request with real credentials"| S
-    S -->|response| D
-    D -->|response| B
-    B -->|response| A
-    K[(APP KEY encrypted)]
-    K -->|decrypt| D
-```
+![Block Diagram](assets/block-diagram.svg)
 
 # Sequence Diagram
 
@@ -410,3 +395,7 @@ make build
 ```
 
 The `key-rest` binary will be created in the project root.
+
+# Hacking Challenge
+
+We are running a [hacking challenge](hacking-challenge/README.md) to find credential exfiltration vulnerabilities in key-rest. Bounties are paid in BTC Lightning Network sats. See the [challenge rules](hacking-challenge/README.md) for details.
