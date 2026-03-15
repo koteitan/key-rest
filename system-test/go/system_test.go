@@ -549,6 +549,386 @@ func TestResponseMasking(t *testing.T) {
 	t.Logf("OK: credential masked in echo response (%d bytes)", len(body))
 }
 
+// TestCompressionMasking verifies that credential masking works correctly
+// when the upstream server returns compressed responses.
+// This is a regression test for issue #10: brotli-compressed responses
+// bypass credential masking because decompressBody does not support brotli.
+func TestCompressionMasking(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	creds, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	echoKeyValue := findCred(creds, "openai", "api-key")
+	if echoKeyValue == "" {
+		t.Fatal("credential not found for compression test")
+	}
+	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(echoKeyValue), passphrase); err != nil {
+		t.Fatalf("add echo key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	encodings := []struct {
+		name           string
+		acceptEncoding string
+	}{
+		{"identity", ""},
+		{"gzip", "gzip"},
+		{"deflate", "deflate"},
+		{"brotli", "br"},
+		{"zstd", "zstd"},
+	}
+
+	for _, tc := range encodings {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := keyrest.NewRequest("GET", baseURL+"/echo/test", nil)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+			if tc.acceptEncoding != "" {
+				req.Header.Set("Accept-Encoding", tc.acceptEncoding)
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+
+			body, _ := io.ReadAll(resp.Body)
+
+			if resp.StatusCode != 200 {
+				t.Fatalf("expected 200, got %d\nbody: %s", resp.StatusCode, truncate(body, 500))
+			}
+
+			// All encodings MUST be decompressed and masked.
+			// If this fails for brotli, it confirms issue #10.
+			if strings.Contains(string(body), echoKeyValue) {
+				t.Fatalf("credential leaked in %s response — masking failed", tc.name)
+			}
+			if !strings.Contains(string(body), "key-rest://") {
+				t.Fatalf("credential not reverse-substituted in %s response — decompression or masking failed", tc.name)
+			}
+			t.Logf("OK: credential masked in %s response (%d bytes)", tc.name, len(body))
+		})
+	}
+}
+
+// TestTruncatedKeyMasking verifies that truncated API keys in error messages
+// from OpenAI and Stripe are masked. These APIs return errors like:
+// "Incorrect API key provided: sk-test-****...abcd"
+// where "abcd" is the real suffix. This is a regression test for issue #11.
+func TestTruncatedKeyMasking(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	creds, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	tests := []struct {
+		name    string
+		service string
+		label   string
+		uri     string
+		method  string
+		urlPath string
+		body    string
+	}{
+		{
+			name: "openai", service: "openai", label: "api-key",
+			uri: "t/openai/api-key", method: "POST",
+			urlPath: "/openai/v1/chat/completions",
+			body:    `{"model":"gpt-4o"}`,
+		},
+		{
+			name: "stripe", service: "stripe", label: "api-key",
+			uri: "t/stripe/api-key", method: "GET",
+			urlPath: "/stripe/v1/charges",
+		},
+	}
+
+	for _, tc := range tests {
+		keyValue := findCred(creds, tc.service, tc.label)
+		if keyValue == "" {
+			t.Fatalf("%s credential not found", tc.service)
+		}
+		if err := store.Add(tc.uri, baseURL+"/"+tc.service+"/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(keyValue), passphrase); err != nil {
+			t.Fatalf("add %s key: %v", tc.service, err)
+		}
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			keyValue := findCred(creds, tc.service, tc.label)
+
+			var bodyReader io.Reader
+			if tc.body != "" {
+				bodyReader = strings.NewReader(tc.body)
+			}
+			req, err := keyrest.NewRequest(tc.method, baseURL+tc.urlPath, bodyReader)
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			// Send WRONG key to trigger error with truncated real key
+			req.Header.Set("Authorization", "Bearer WRONG_KEY")
+			if tc.body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			defer resp.Body.Close()
+
+			body, _ := io.ReadAll(resp.Body)
+			bodyStr := string(body)
+
+			suffix := keyValue[len(keyValue)-4:]
+			if strings.Contains(bodyStr, suffix) {
+				t.Fatalf("partial credential (suffix %q) leaked in %s error response:\n%s", suffix, tc.name, truncate(body, 500))
+			}
+
+			if !strings.Contains(bodyStr, "key-rest://"+tc.uri) {
+				t.Fatalf("truncated key was not replaced with key-rest:// URI in %s response:\n%s", tc.name, truncate(body, 500))
+			}
+
+			t.Logf("OK: partial key masked in %s error response", tc.name)
+		})
+	}
+}
+
+// TestPercentEncodedMasking verifies that credentials percent-encoded in
+// responses are detected and masked. This is a regression test for issue #13.
+func TestPercentEncodedMasking(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	creds, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	echoKeyValue := findCred(creds, "openai", "api-key")
+	if echoKeyValue == "" {
+		t.Fatal("credential not found for percent-echo test")
+	}
+	// Register key for percent-echo endpoint
+	if err := store.Add("t/pctecho/key", baseURL+"/percent-echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(echoKeyValue), passphrase); err != nil {
+		t.Fatalf("add key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	req, err := keyrest.NewRequest("GET", baseURL+"/percent-echo/test", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer key-rest://t/pctecho/key")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+
+	if strings.Contains(bodyStr, echoKeyValue) {
+		t.Fatalf("credential leaked in percent-encoded response:\n%s", truncate(body, 500))
+	}
+
+	if !strings.Contains(bodyStr, "key-rest://") {
+		t.Fatalf("credential was not masked in percent-encoded response:\n%s", truncate(body, 500))
+	}
+
+	t.Logf("OK: percent-encoded credential masked (%d bytes)", len(body))
+}
+
+// TestPathTraversalBlocked verifies that path traversal via .. segments
+// is blocked by URL normalization before the prefix check. (issue #15)
+func TestPathTraversalBlocked(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	_, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	// Register key restricted to /echo/ prefix only
+	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte("test-secret-value"), passphrase); err != nil {
+		t.Fatalf("add key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	// Attempt path traversal: /echo/../openai/ should be normalized to /openai/
+	// which does not match the /echo/ prefix, so the request must be rejected.
+	traversalURL := baseURL + "/echo/../openai/v1/chat"
+	req, err := keyrest.NewRequest("GET", traversalURL, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Client returns error for daemon-level errors.
+		if strings.Contains(err.Error(), "INSECURE_REQUEST") || strings.Contains(err.Error(), "URL_PREFIX_MISMATCH") {
+			t.Logf("OK: path traversal blocked: %v", err)
+			return
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	t.Fatalf("path traversal was not blocked — got status %d with body:\n%s", resp.StatusCode, truncate(body, 500))
+}
+
 func truncate(b []byte, max int) string {
 	if len(b) <= max {
 		return string(b)

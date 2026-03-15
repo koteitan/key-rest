@@ -12,11 +12,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
-	"net/url"
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/uri"
@@ -119,6 +122,13 @@ func (p *Proxy) Handle(req *Request) *Response {
 		return errorResponse("INSECURE_REQUEST", "URLs with userinfo (@) are not allowed")
 	}
 
+	// Reject path traversal segments to prevent url_prefix bypass (issue #15).
+	// Go's net/http client normalizes /../ before sending, so an agent could
+	// craft a URL that passes prefix check but reaches a different endpoint.
+	if strings.Contains(req.URL, "/../") || strings.HasSuffix(req.URL, "/..") {
+		return errorResponse("INSECURE_REQUEST", "URLs with path traversal (/../) are not allowed")
+	}
+
 	// Validate all key-rest:// URIs (url_prefix, field restrictions) without resolving
 	if err := p.validateField(req.URL, "url", "", req.URL); err != nil {
 		return toErrorResponse(err)
@@ -179,15 +189,20 @@ func (p *Proxy) Handle(req *Request) *Response {
 
 	// Reverse-substitute credential values back to key-rest:// URIs in response
 	// to prevent credential leakage through APIs that echo back auth data.
-	// Transform outputs (e.g., base64) are masked first, then raw credentials.
+	// Transform outputs (e.g., base64) are masked first, then raw credentials,
+	// then partial credential patterns (e.g., OpenAI truncated keys in errors).
 	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
 	respBodyStr = p.maskCredentials(respBodyStr)
+	respBodyStr = p.maskTruncatedKeys(respBodyStr)
+	respBodyStr = p.maskPercentEncoded(respBodyStr)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
 		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
-		respHeaders[k] = p.maskCredentials(v)
+		v = p.maskCredentials(v)
+		v = p.maskTruncatedKeys(v)
+		respHeaders[k] = p.maskPercentEncoded(v)
 	}
 
 	return &Response{
@@ -452,6 +467,67 @@ func (p *Proxy) maskCredentials(s string) string {
 	return s
 }
 
+// maskTruncatedKeys masks truncated API key patterns that some APIs include
+// in error messages (e.g., "sk-test-************************************abcd"
+// where "abcd" is the real suffix of the credential).
+// Known APIs: OpenAI, Stripe.
+// Only applies to keys whose url_prefix matches a known API or localhost.
+var truncatedKeyPrefixes = []string{
+	"https://api.openai.com/",
+	"https://api.stripe.com/",
+	"https://localhost",
+}
+
+func (p *Proxy) maskTruncatedKeys(s string) string {
+	p.store.RLock()
+	decrypted := p.store.Decrypted()
+	p.store.RUnlock()
+
+	for _, dk := range decrypted {
+		if len(dk.Value) < 8 {
+			continue
+		}
+		match := false
+		for _, pfx := range truncatedKeyPrefixes {
+			if strings.Contains(dk.URLPrefix, pfx) {
+				match = true
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+		raw := string(dk.Value)
+		// Pattern: first 2+ chars of key, then non-whitespace chars leading into
+		// 4+ asterisks, then the last 4 chars of the key.
+		// e.g., "sk-test-************************************abcd"
+		re := regexp.MustCompile(
+			regexp.QuoteMeta(raw[:2]) + `[^\s"]*?\*{4,}` + regexp.QuoteMeta(raw[len(raw)-4:]),
+		)
+		s = re.ReplaceAllString(s, "key-rest://"+dk.URI)
+	}
+	return s
+}
+
+// maskPercentEncoded detects credentials hidden in percent-encoded form.
+// If the response contains '%', it URL-decodes the body and retries masking.
+// If masking finds credentials in the decoded form, the decoded+masked version
+// is returned; otherwise the original is kept unchanged.
+func (p *Proxy) maskPercentEncoded(s string) string {
+	if !strings.Contains(s, "%") {
+		return s
+	}
+	decoded, err := url.QueryUnescape(s)
+	if err != nil || decoded == s {
+		return s
+	}
+	masked := p.maskCredentials(decoded)
+	if masked != decoded {
+		return masked
+	}
+	return s
+}
+
 // collectTransformOutputs resolves all transform expressions (e.g., base64)
 // in the request and returns a map from resolved value → original template.
 func (p *Proxy) collectTransformOutputs(req *Request) map[string]string {
@@ -504,6 +580,15 @@ func decompressBody(body []byte, encoding string) ([]byte, error) {
 		return io.ReadAll(r)
 	case "deflate":
 		r := flate.NewReader(bytes.NewReader(body))
+		defer r.Close()
+		return io.ReadAll(r)
+	case "br":
+		return io.ReadAll(brotli.NewReader(bytes.NewReader(body)))
+	case "zstd":
+		r, err := zstd.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
 		defer r.Close()
 		return io.ReadAll(r)
 	case "", "identity":

@@ -5,6 +5,9 @@
 package main
 
 import (
+	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -25,6 +28,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/zstd"
 )
 
 // --- Credential generation ---
@@ -51,9 +57,65 @@ type mockService struct {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	writeJSONWithEncoding(w, nil, status, v)
+}
+
+// writeJSONWithEncoding writes a JSON response, optionally compressed based on
+// the Accept-Encoding header from the request.
+func writeJSONWithEncoding(w http.ResponseWriter, r *http.Request, status int, v interface{}) {
+	plain, err := json.Marshal(v)
+	if err != nil {
+		http.Error(w, "json marshal error", 500)
+		return
+	}
+	plain = append(plain, '\n')
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+
+	if r == nil {
+		w.WriteHeader(status)
+		w.Write(plain)
+		return
+	}
+
+	ae := r.Header.Get("Accept-Encoding")
+	switch {
+	case strings.Contains(ae, "br"):
+		var buf bytes.Buffer
+		bw := brotli.NewWriter(&buf)
+		bw.Write(plain)
+		bw.Close()
+		w.Header().Set("Content-Encoding", "br")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	case strings.Contains(ae, "gzip"):
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		gw.Write(plain)
+		gw.Close()
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	case strings.Contains(ae, "deflate"):
+		var buf bytes.Buffer
+		fw, _ := flate.NewWriter(&buf, flate.DefaultCompression)
+		fw.Write(plain)
+		fw.Close()
+		w.Header().Set("Content-Encoding", "deflate")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	case strings.Contains(ae, "zstd"):
+		var buf bytes.Buffer
+		zw, _ := zstd.NewWriter(&buf)
+		zw.Write(plain)
+		zw.Close()
+		w.Header().Set("Content-Encoding", "zstd")
+		w.WriteHeader(status)
+		w.Write(buf.Bytes())
+	default:
+		w.WriteHeader(status)
+		w.Write(plain)
+	}
 }
 
 // --- Auth checker factories ---
@@ -132,6 +194,22 @@ func bodyChecker(field, expected string) func(r *http.Request) bool {
 	}
 }
 
+// percentEncodeAll encodes every non-alphanumeric byte as %XX.
+// This simulates servers that aggressively percent-encode values,
+// including characters like '-' that standard encoders leave unchanged.
+func percentEncodeAll(s string) string {
+	var buf strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			buf.WriteByte(c)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", c)
+		}
+	}
+	return buf.String()
+}
+
 // --- Response helper ---
 
 func M(kv ...interface{}) map[string]interface{} {
@@ -144,11 +222,34 @@ func M(kv ...interface{}) map[string]interface{} {
 
 // --- OpenAI-compatible response factories ---
 
-func openaiError() func(w http.ResponseWriter) {
+// truncateKey mimics OpenAI's error format: prefix + asterisks + last 4 chars.
+// e.g., "sk-test-abc123" → "sk-test-******bc23"
+func truncateKey(key string) string {
+	if len(key) < 8 {
+		return strings.Repeat("*", len(key))
+	}
+	// Find the end of the prefix portion (up to and including the last hyphen
+	// before the secret part, but at least 3 chars)
+	prefixEnd := 0
+	for i, c := range key {
+		if c == '-' {
+			prefixEnd = i + 1
+		}
+	}
+	if prefixEnd < 3 {
+		prefixEnd = 3
+	}
+	if prefixEnd > len(key)-4 {
+		prefixEnd = len(key) - 4
+	}
+	return key[:prefixEnd] + strings.Repeat("*", len(key)-prefixEnd-4) + key[len(key)-4:]
+}
+
+func openaiError(key string) func(w http.ResponseWriter) {
 	return func(w http.ResponseWriter) {
 		writeJSON(w, 401, M(
 			"error", M(
-				"message", "Incorrect API key provided.",
+				"message", fmt.Sprintf("Incorrect API key provided: %s. You can find your API key at https://platform.openai.com/account/api-keys.", truncateKey(key)),
 				"type", "invalid_request_error",
 				"param", nil,
 				"code", "invalid_api_key",
@@ -192,7 +293,7 @@ func buildServices() (map[string]*mockService, []credEntry) {
 		add(name, &mockService{
 			creds:     []credEntry{{label: "api-key", value: key}},
 			checkAuth: bearerChecker(key),
-			onFail:    openaiError(),
+			onFail:    openaiError(key),
 			onOK:      openaiOK(model),
 		})
 	}
@@ -225,6 +326,24 @@ func buildServices() (map[string]*mockService, []credEntry) {
 					"stop_reason", "end_turn",
 					"usage", M("input_tokens", 10, "output_tokens", 20),
 				))
+			},
+		})
+	}
+
+	// ---- Stripe ----
+	{
+		key := "rk_live_test" + randHex(16)
+		add("stripe", &mockService{
+			creds:     []credEntry{{label: "api-key", value: key}},
+			checkAuth: bearerChecker(key),
+			onFail: func(w http.ResponseWriter) {
+				writeJSON(w, 401, M("error", M(
+					"message", fmt.Sprintf("Invalid API Key provided: %s", truncateKey(key)),
+					"type", "invalid_request_error",
+				)))
+			},
+			onOK: func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, 200, M("id", "ch_test_"+randHex(4), "object", "charge", "amount", 1000, "currency", "usd", "status", "succeeded"))
 			},
 		})
 	}
@@ -659,6 +778,19 @@ func main() {
 		headers := make(map[string]string)
 		for name, vals := range r.Header {
 			headers[name] = vals[0]
+		}
+		writeJSONWithEncoding(w, r, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
+	})
+
+	// Percent-echo handler — reflects headers with values percent-encoded.
+	// Used to test masking of percent-encoded credentials in responses.
+	mux.HandleFunc("/percent-echo/", func(w http.ResponseWriter, r *http.Request) {
+		if *logRequest {
+			logHTTPRequest("percent-echo", r)
+		}
+		headers := make(map[string]string)
+		for name, vals := range r.Header {
+			headers[name] = percentEncodeAll(vals[0])
 		}
 		writeJSON(w, 200, M("headers", headers, "method", r.Method, "path", r.URL.Path))
 	})

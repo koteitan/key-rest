@@ -3,6 +3,8 @@ module github.com/koteitan/key-rest
 go 1.24.0
 
 require (
+	github.com/andybalholm/brotli v1.2.0
+	github.com/klauspost/compress v1.18.4
 	github.com/koteitan/key-rest/go v0.0.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/term v0.40.0
