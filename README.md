@@ -17,30 +17,6 @@ const fetch = createFetch();
 ```
 Then key-rest replaces `key-rest://user1/claude/api-key` with `sk-ant-api03-abcdefg`, calls the REST API, and returns the response as usual.
 
-# Security
-## API Key
-- The following describes where API keys are stored in plaintext:
-  - During key-rest add:
-    - Entered from standard input and held in memory.
-    - Encrypted with the master key and saved to a file.
-  - During key-rest-daemon startup:
-    - Encrypted API keys stored in the file are decrypted and held in memory.
-    - Encrypted for HTTPS transmission.
-## Master Key
-- The following describes where the master key is stored in plaintext:
-  - The master key is entered from standard input at key-rest-daemon startup and held in memory.
-  - Cleared from memory when key-rest-daemon terminates.
-
-## Response Masking
-
-key-rest-daemon masks credential values in responses to prevent credential exfiltration through APIs that echo back authentication data.
-
-- **Raw credentials**: If a response body or header contains a raw credential value, it is replaced with the corresponding `key-rest://` URI.
-- **Transform outputs**: `{{ base64(...) }}` and other transform expressions are resolved before sending the request. If the upstream echoes back the transformed value (e.g., a base64-encoded credential), it is replaced with the original template string in the response.
-- **JSON-escaped credentials**: Credentials containing special characters (e.g., `"`, `\`) are also masked in their JSON-escaped form.
-
-As a result, responses from echo/debug endpoints may appear as if templates were never expanded (e.g., `{{ base64(...) }}` appears in the response body), even though the upstream server received the correctly expanded values.
-
 # Block Diagram
 
 ```mermaid
@@ -51,10 +27,10 @@ graph LR
     S[services]
 
     A -->|"request with key-rest:// URI"| B
-    B -->|Unix socket| D
-    D -->|"GET/POST with real credentials"| S
+    B -->|"request with key-rest:// URI"| D
+    D -->|"request with real credentials"| S
     S -->|response| D
-    D -->|Unix socket| B
+    D -->|response| B
     B -->|response| A
     K[(APP KEY encrypted)]
     K -->|decrypt| D
@@ -216,7 +192,7 @@ Authorization: Basic {{ base64(key-rest://user1/atlassian/email, ":", key-rest:/
 4. If a transform function exists, apply it (e.g., `base64(...)` → concatenate arguments and base64 encode)
 5. Replace the entire match (including `{{ }}` for Enclosed) with the final result
 
-# key-rest
+# key-rest clients
 key-rest receives REST API calls with key-rest URIs from the LLM agent, forwards requests to the key-rest-daemon, and returns responses from the key-rest-daemon to the LLM agent.
 
 key-rest has various interfaces.
@@ -332,6 +308,30 @@ A curl wrapper command. It accepts the same arguments as curl, resolves key-rest
 ./clients/curl/key-rest-curl https://api.example.com/data \
   -H "Authorization: Bearer key-rest://user1/example/api-key"
 ```
+
+# Security
+## API Key
+- The following describes where API keys are stored in plaintext:
+  - During key-rest add:
+    - Entered from standard input and held in memory.
+    - Encrypted with the master key and saved to a file.
+  - During key-rest-daemon startup:
+    - Encrypted API keys stored in the file are decrypted and held in memory.
+    - Encrypted for HTTPS transmission.
+## Master Key
+- The following describes where the master key is stored in plaintext:
+  - The master key is entered from standard input at key-rest-daemon startup and held in memory.
+  - Cleared from memory when key-rest-daemon terminates.
+
+## Response Masking
+
+key-rest-daemon masks credential values in responses to prevent credential exfiltration through APIs that echo back authentication data.
+
+- **Raw credentials**: If a response body or header contains a raw credential value, it is replaced with the corresponding `key-rest://` URI.
+- **Transform outputs**: `{{ base64(...) }}` and other transform expressions are resolved before sending the request. If the upstream echoes back the transformed value (e.g., a base64-encoded credential), it is replaced with the original template string in the response.
+- **JSON-escaped credentials**: Credentials containing special characters (e.g., `"`, `\`) are also masked in their JSON-escaped form.
+
+As a result, responses from echo/debug endpoints may appear as if templates were never expanded (e.g., `{{ base64(...) }}` appears in the response body), even though the upstream server received the correctly expanded values.
 
 # Requirements
 

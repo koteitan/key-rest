@@ -1,3 +1,5 @@
+[English](http.md) | [Japanese](http-ja.md)
+
 # Go http.Get to TCP: Call Chain and Delayed Replacement
 
 ## Call chain from http.Get to TCP send
