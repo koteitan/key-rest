@@ -185,14 +185,14 @@ func (p *Proxy) Handle(req *Request) *Response {
 	// then partial credential patterns (e.g., OpenAI truncated keys in errors).
 	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
 	respBodyStr = p.maskCredentials(respBodyStr)
-	respBodyStr = p.maskOpenAIPartialKeys(respBodyStr)
+	respBodyStr = p.maskTruncatedKeys(respBodyStr)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
 		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
 		v = p.maskCredentials(v)
-		respHeaders[k] = p.maskOpenAIPartialKeys(v)
+		respHeaders[k] = p.maskTruncatedKeys(v)
 	}
 
 	return &Response{
@@ -457,11 +457,18 @@ func (p *Proxy) maskCredentials(s string) string {
 	return s
 }
 
-// maskOpenAIPartialKeys masks truncated API key patterns that OpenAI includes
+// maskTruncatedKeys masks truncated API key patterns that some APIs include
 // in error messages (e.g., "sk-test-************************************abcd"
 // where "abcd" is the real suffix of the credential).
-// Only applies to keys whose url_prefix contains https://api.openai.com/ or https://localhost.
-func (p *Proxy) maskOpenAIPartialKeys(s string) string {
+// Known APIs: OpenAI, Stripe.
+// Only applies to keys whose url_prefix matches a known API or localhost.
+var truncatedKeyPrefixes = []string{
+	"https://api.openai.com/",
+	"https://api.stripe.com/",
+	"https://localhost",
+}
+
+func (p *Proxy) maskTruncatedKeys(s string) string {
 	p.store.RLock()
 	decrypted := p.store.Decrypted()
 	p.store.RUnlock()
@@ -470,8 +477,14 @@ func (p *Proxy) maskOpenAIPartialKeys(s string) string {
 		if len(dk.Value) < 8 {
 			continue
 		}
-		if !strings.Contains(dk.URLPrefix, "https://api.openai.com/") &&
-			!strings.Contains(dk.URLPrefix, "https://localhost") {
+		match := false
+		for _, pfx := range truncatedKeyPrefixes {
+			if strings.Contains(dk.URLPrefix, pfx) {
+				match = true
+				break
+			}
+		}
+		if !match {
 			continue
 		}
 		raw := string(dk.Value)

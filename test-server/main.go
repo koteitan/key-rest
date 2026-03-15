@@ -305,6 +305,24 @@ func buildServices() (map[string]*mockService, []credEntry) {
 		})
 	}
 
+	// ---- Stripe ----
+	{
+		key := "rk_live_test" + randHex(16)
+		add("stripe", &mockService{
+			creds:     []credEntry{{label: "api-key", value: key}},
+			checkAuth: bearerChecker(key),
+			onFail: func(w http.ResponseWriter) {
+				writeJSON(w, 401, M("error", M(
+					"message", fmt.Sprintf("Invalid API Key provided: %s", truncateKey(key)),
+					"type", "invalid_request_error",
+				)))
+			},
+			onOK: func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, 200, M("id", "ch_test_"+randHex(4), "object", "charge", "amount", 1000, "currency", "usd", "status", "succeeded"))
+			},
+		})
+	}
+
 	// ---- GitHub ----
 	{
 		key := "ghp_test" + randHex(16)
