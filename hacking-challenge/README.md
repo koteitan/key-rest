@@ -31,9 +31,11 @@
   - Verification will be done as issues come in, without waiting for the deadline.
 
 ## Detailed Rules
+- Target Environment:
   - sushi-mage is assumed to have no superuser or sudo privileges.
-  - The mock REST server used for verification runs on the client host during testing, but attacks that rely on this are invalid; only attacks that assume the server is on a separate host are valid.
+  - The mock REST server used for verification runs on the client host during testing, but attacks that assume it is on the same host are invalid; only attacks that assume the server is on a separate host are valid.
   - If verification is deemed legally or ethically problematic, the issue will not be verified.
+- Participants and Bounties:
   - If different participants tie, the lowest ranking bounty is paid.
   - In the following cases, the lower-ranked issue receives no bounty, and lower-ranked methods move up:
     - The same participant wins multiple issues
