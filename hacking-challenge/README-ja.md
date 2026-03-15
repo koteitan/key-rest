@@ -4,7 +4,7 @@
 
 ## ルール
 - 参加者は、koteitan/key-rest の issue に agent が credentials を奪取する方法を書く。必要な情報は下記の通り:
-  - issue に hacking-challenge のラベルを付ける
+  - `hacking-challenge` と issue 本文かコメントに書く
   - 報奨支払い先の BTC LN アドレス
   - credentials を奪取する方法の説明
 - 対象となるサーバーは、koteitan のローカルマシン ika 上の mock REST server。

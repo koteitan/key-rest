@@ -4,7 +4,7 @@
 
 ## Rules
 - Participants submit an issue to koteitan/key-rest describing how an agent can exfiltrate credentials. Required information:
-  - Label the issue with `hacking-challenge`
+  - write `hacking-challenge` in the issue body or in the comment
   - BTC Lightning Network address for bounty payment
   - Description of the credential exfiltration method
 - The target server is a mock REST server on koteitan's local machine "ika".
