@@ -854,6 +854,81 @@ func TestPercentEncodedMasking(t *testing.T) {
 	t.Logf("OK: percent-encoded credential masked (%d bytes)", len(body))
 }
 
+// TestPathTraversalBlocked verifies that path traversal via .. segments
+// is blocked by URL normalization before the prefix check. (issue #15)
+func TestPathTraversalBlocked(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	_, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	// Register key restricted to /echo/ prefix only
+	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte("test-secret-value"), passphrase); err != nil {
+		t.Fatalf("add key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	// Attempt path traversal: /echo/../openai/ should be normalized to /openai/
+	// which does not match the /echo/ prefix, so the request must be rejected.
+	traversalURL := baseURL + "/echo/../openai/v1/chat"
+	req, err := keyrest.NewRequest("GET", traversalURL, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Client returns error for daemon-level errors.
+		if strings.Contains(err.Error(), "INSECURE_REQUEST") || strings.Contains(err.Error(), "URL_PREFIX_MISMATCH") {
+			t.Logf("OK: path traversal blocked: %v", err)
+			return
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	t.Fatalf("path traversal was not blocked — got status %d with body:\n%s", resp.StatusCode, truncate(body, 500))
+}
+
 func truncate(b []byte, max int) string {
 	if len(b) <= max {
 		return string(b)

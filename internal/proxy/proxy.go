@@ -122,6 +122,13 @@ func (p *Proxy) Handle(req *Request) *Response {
 		return errorResponse("INSECURE_REQUEST", "URLs with userinfo (@) are not allowed")
 	}
 
+	// Reject path traversal segments to prevent url_prefix bypass (issue #15).
+	// Go's net/http client normalizes /../ before sending, so an agent could
+	// craft a URL that passes prefix check but reaches a different endpoint.
+	if strings.Contains(req.URL, "/../") || strings.HasSuffix(req.URL, "/..") {
+		return errorResponse("INSECURE_REQUEST", "URLs with path traversal (/../) are not allowed")
+	}
+
 	// Validate all key-rest:// URIs (url_prefix, field restrictions) without resolving
 	if err := p.validateField(req.URL, "url", "", req.URL); err != nil {
 		return toErrorResponse(err)
