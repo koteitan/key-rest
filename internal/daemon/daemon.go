@@ -81,6 +81,11 @@ func (d *Daemon) Start(passphrase []byte) error {
 		return fmt.Errorf("failed to disable core dumps: %w", err)
 	}
 
+	// Prevent /proc/PID/mem, /proc/PID/maps, /proc/PID/environ access by non-root
+	if _, _, errno := syscall.Syscall(syscall.SYS_PRCTL, 4 /* PR_SET_DUMPABLE */, 0, 0); errno != 0 {
+		return fmt.Errorf("failed to set PR_SET_DUMPABLE: %w", errno)
+	}
+
 	// Decrypt all keys
 	if err := d.store.DecryptAll(passphrase); err != nil {
 		return fmt.Errorf("failed to decrypt keys: %w", err)
