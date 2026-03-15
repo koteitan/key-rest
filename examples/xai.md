@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/xai/api-key https://api.x.ai/
+./key-rest add --allow-only-header Authorization user1/xai/api-key https://api.x.ai/
 # → Enter the key value: (enter xAI API key)
 ```
 

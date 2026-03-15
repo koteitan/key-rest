@@ -4,7 +4,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/slack/bot-token https://slack.com/
+./key-rest add --allow-only-header Authorization user1/slack/bot-token https://slack.com/
 # → キーの値を入力してください: (Slack Bot Token を入力)
 ```
 

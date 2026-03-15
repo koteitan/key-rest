@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/mistral/api-key https://api.mistral.ai/
+./key-rest add --allow-only-header Authorization user1/mistral/api-key https://api.mistral.ai/
 # → Enter the key value: (enter Mistral API key)
 ```
 

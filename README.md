@@ -53,7 +53,7 @@ sequenceDiagram
     D->>D: Hold passphrase in memory<br/>Decrypt encrypted keys
     D->>U: daemon started
 
-    U->>D: ./key-rest add user1/brave/api-key https://api.search.brave.com/
+    U->>D: ./key-rest add --allow-only-header X-Subscription-Token user1/brave/api-key https://api.search.brave.com/
     D->>U: Enter the key value
     U->>D: (enter key value)
     D->>D: Encrypt key and save to file<br/>Also hold in memory
@@ -81,9 +81,13 @@ key-rest-daemon is a daemon for calling REST APIs. It holds APP KEYs and receive
   - When the key-rest-daemon is in the running state, entering the passphrase is not required.
   - After that, you will be prompted to enter the key value. The entered key is encrypted and saved to a file.
   - Options:
-    - `--allow-url` : Allows replacement within the URL (for query parameter authentication: Gemini, Trello, etc.)
-    - `--allow-body` : Allows replacement within the request body (for body authentication: Tavily, etc.)
-    - By default, replacement is only allowed within headers
+    - `--allow-only-header <name>` : Allows replacement only in the specified header (e.g., `Authorization`, `X-Api-Key`)
+    - `--allow-only-query <name>` : Allows replacement only in the specified URL query parameter (e.g., `key`, `token`)
+    - `--allow-only-field <name>` : Allows replacement only in the specified JSON body field (e.g., `api_key`)
+    - `--allow-only-url` : Allows replacement anywhere in the URL (for path embedding: Telegram, etc.)
+    - `--allow-only-body` : Allows replacement anywhere in the request body
+    - Multiple `--allow-only-header/query/field` flags can be specified
+    - By default (no flags), replacement is only allowed within headers (legacy mode)
 - `./key-rest remove <key>` : Removes a key from the key-rest-daemon.
 - `./key-rest list` : Displays a list of keys registered in the key-rest-daemon.
   - Output example

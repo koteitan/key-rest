@@ -27,9 +27,9 @@ func setupProxy(t *testing.T) (*Proxy, *keystore.Store) {
 		t.Fatal(err)
 	}
 	pass := []byte("test-pass")
-	store.Add("user1/test/api-key", "https://", false, false, []byte("real-api-key"), pass)
-	store.Add("user1/test/url-key", "https://", true, false, []byte("url-key-val"), pass)
-	store.Add("user1/test/body-key", "https://", false, true, []byte("body-key-val"), pass)
+	store.Add("user1/test/api-key", "https://", false, false, nil, []byte("real-api-key"), pass)
+	store.Add("user1/test/url-key", "https://", true, false, nil, []byte("url-key-val"), pass)
+	store.Add("user1/test/body-key", "https://", false, true, nil, []byte("body-key-val"), pass)
 	store.DecryptAll(pass)
 	return New(store), store
 }
@@ -49,7 +49,7 @@ func TestHandleBasicRequest(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("test-pass")
-	store.Add("user1/ts/key", ts.URL+"/", false, false, []byte("real-api-key"), pass)
+	store.Add("user1/ts/key", ts.URL+"/", false, false, nil, []byte("real-api-key"), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -146,7 +146,7 @@ func TestHandleAllowURL(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/url-key", ts.URL+"/", true, false, []byte("url-key-val"), pass)
+	store.Add("user1/url-key", ts.URL+"/", true, false, nil, []byte("url-key-val"), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -178,7 +178,7 @@ func TestHandleAllowBody(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/body-key", ts.URL+"/", false, true, []byte("body-key-val"), pass)
+	store.Add("user1/body-key", ts.URL+"/", false, true, nil, []byte("body-key-val"), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -220,7 +220,7 @@ func TestHandleURLPrefixMismatch(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/brave/key", "https://api.search.brave.com/", false, false, []byte("brave-key"), pass)
+	store.Add("user1/brave/key", "https://api.search.brave.com/", false, false, nil, []byte("brave-key"), pass)
 	store.DecryptAll(pass)
 	p := New(store)
 
@@ -285,7 +285,7 @@ func TestHandleResponseMasking(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/echo/key", ts.URL+"/", false, false, []byte("SECRET-VALUE-123"), pass)
+	store.Add("user1/echo/key", ts.URL+"/", false, false, nil, []byte("SECRET-VALUE-123"), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -353,8 +353,8 @@ func TestHandleBase64TransformMasking(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/atl/email", ts.URL+"/", false, false, []byte("user@example.com"), pass)
-	store.Add("user1/atl/token", ts.URL+"/", false, false, []byte("SECRET-TOKEN-456"), pass)
+	store.Add("user1/atl/email", ts.URL+"/", false, false, nil, []byte("user@example.com"), pass)
+	store.Add("user1/atl/token", ts.URL+"/", false, false, nil, []byte("SECRET-TOKEN-456"), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -410,7 +410,7 @@ func TestHandleJSONEscapedMasking(t *testing.T) {
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
 	// Credential with characters that get JSON-escaped
-	store.Add("user1/echo/jsonesc", ts.URL+"/", false, false, []byte(`ULTRA"SECRET\\X`), pass)
+	store.Add("user1/echo/jsonesc", ts.URL+"/", false, false, nil, []byte(`ULTRA"SECRET\\X`), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)

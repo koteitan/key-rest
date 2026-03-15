@@ -6,9 +6,9 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/trello/api-key https://api.trello.com/
+./key-rest add --allow-only-query key user1/trello/api-key https://api.trello.com/
 # → キーの値を入力してください: (Trello API Key を入力)
-./key-rest add user1/trello/token https://api.trello.com/
+./key-rest add --allow-only-query token user1/trello/token https://api.trello.com/
 # → キーの値を入力してください: (Trello Token を入力)
 ```
 

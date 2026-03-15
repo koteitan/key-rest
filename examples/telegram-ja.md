@@ -6,7 +6,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/telegram/bot-token https://api.telegram.org/
+./key-rest add --allow-only-url user1/telegram/bot-token https://api.telegram.org/
 # → キーの値を入力してください: (Telegram Bot Token を入力)
 ```
 

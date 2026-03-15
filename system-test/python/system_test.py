@@ -112,7 +112,7 @@ def main():
                 input=inp, env=env, capture_output=True, check=True,
             )
 
-        # Bearer token services
+        # Bearer token services (--allow-only-header Authorization)
         for uri, path in [
             ("openai/api-key", "/openai/"), ("mistral/api-key", "/mistral/"),
             ("groq/api-key", "/groq/"), ("xai/api-key", "/xai/"),
@@ -123,32 +123,33 @@ def main():
             ("notion/api-key", "/notion/"), ("discord/bot-token", "/discord/"),
             ("linear/api-key", "/linear/"),
         ]:
-            add_key(uri, base + path)
+            add_key(uri, base + path, "--allow-only-header", "Authorization")
 
         # Custom header services
-        for uri, path in [
-            ("anthropic/api-key", "/anthropic/"), ("exa/api-key", "/exa/"),
-            ("brave/api-key", "/brave/"), ("gitlab/token", "/gitlab/"),
-            ("bing/api-key", "/bing/"),
+        for uri, path, header in [
+            ("anthropic/api-key", "/anthropic/", "X-Api-Key"),
+            ("exa/api-key", "/exa/", "X-Api-Key"),
+            ("brave/api-key", "/brave/", "X-Subscription-Token"),
+            ("gitlab/token", "/gitlab/", "Private-Token"),
+            ("bing/api-key", "/bing/", "Ocp-Apim-Subscription-Key"),
         ]:
-            add_key(uri, base + path)
+            add_key(uri, base + path, "--allow-only-header", header)
 
         # Query parameter services
-        for uri, path in [
-            ("gemini/api-key", "/gemini/"), ("google-search/api-key", "/google-search/"),
-            ("trello/api-key", "/trello/"), ("trello/token", "/trello/"),
-        ]:
-            add_key(uri, base + path, "--allow-url")
+        add_key("gemini/api-key", base + "/gemini/", "--allow-only-query", "key")
+        add_key("google-search/api-key", base + "/google-search/", "--allow-only-query", "key")
+        add_key("trello/api-key", base + "/trello/", "--allow-only-query", "key")
+        add_key("trello/token", base + "/trello/", "--allow-only-query", "token")
 
         # Body field services
-        add_key("tavily/api-key", base + "/tavily/", "--allow-body")
+        add_key("tavily/api-key", base + "/tavily/", "--allow-only-field", "api_key")
 
         # Path embedding services
-        add_key("telegram/bot-token", base + "/telegram/", "--allow-url")
+        add_key("telegram/bot-token", base + "/telegram/", "--allow-only-url")
 
         # Basic auth
-        add_key("atlassian/email", base + "/atlassian/")
-        add_key("atlassian/token", base + "/atlassian/")
+        add_key("atlassian/email", base + "/atlassian/", "--allow-only-header", "Authorization")
+        add_key("atlassian/token", base + "/atlassian/", "--allow-only-header", "Authorization")
 
         # Trust test-server cert (must be before daemon start)
         env["SSL_CERT_FILE"] = cert
@@ -294,7 +295,7 @@ def main():
         echo_key_value = creds["openai/api-key"]
         # Register a key for the echo endpoint
         subprocess.run(
-            [key_rest, "add", "user1/echo/key", base + "/echo/"],
+            [key_rest, "add", "--allow-only-header", "Authorization", "user1/echo/key", base + "/echo/"],
             input=f"{passphrase}\n{echo_key_value}\n".encode(),
             env=env, capture_output=True, check=True,
         )

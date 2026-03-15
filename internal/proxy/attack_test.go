@@ -41,7 +41,7 @@ func TestAttack_URLEncodedMaskingBypass(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/victim/key", ts.URL+"/", false, false, []byte(credential), pass)
+	store.Add("user1/victim/key", ts.URL+"/", false, false, nil, []byte(credential), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -107,7 +107,7 @@ func TestAttack_DoubleJSONEncodingBypass(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/victim/key", ts.URL+"/", false, false, []byte(credential), pass)
+	store.Add("user1/victim/key", ts.URL+"/", false, false, nil, []byte(credential), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -165,7 +165,7 @@ func TestAttack_CRLFInjectionInURL(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/victim/key", ts.URL+"/", false, false, []byte(credential), pass)
+	store.Add("user1/victim/key", ts.URL+"/", false, false, nil, []byte(credential), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -233,7 +233,7 @@ func TestAttack_PathTraversalPrefixBypass(t *testing.T) {
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
 	// Key is only allowed for /legitimate/ prefix
-	store.Add("user1/legit/key", ts.URL+"/legitimate/", false, false, []byte(credential), pass)
+	store.Add("user1/legit/key", ts.URL+"/legitimate/", false, false, nil, []byte(credential), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)
@@ -310,8 +310,8 @@ func TestAttack_SubstringMaskingCollision(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/short/key", ts.URL+"/", false, false, []byte(shortCred), pass)
-	store.Add("user1/long/key", ts.URL+"/", false, false, []byte(longCred), pass)
+	store.Add("user1/short/key", ts.URL+"/", false, false, nil, []byte(shortCred), pass)
+	store.Add("user1/long/key", ts.URL+"/", false, false, nil, []byte(longCred), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)

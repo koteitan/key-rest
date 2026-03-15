@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/groq/api-key https://api.groq.com/
+./key-rest add --allow-only-header Authorization user1/groq/api-key https://api.groq.com/
 # → Enter the key value: (enter Groq API key)
 ```
 

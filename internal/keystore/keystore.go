@@ -12,13 +12,24 @@ import (
 	"github.com/koteitan/key-rest/internal/crypto"
 )
 
+// Placement defines where a credential may appear in a request.
+// nil means legacy mode (use AllowURL/AllowBody flags).
+type Placement struct {
+	Headers []string `json:"headers,omitempty"` // allowed header names (case-insensitive)
+	Queries []string `json:"queries,omitempty"` // allowed URL query parameter names
+	Fields  []string `json:"fields,omitempty"`  // allowed JSON body field names
+	URL     bool     `json:"url,omitempty"`     // allow anywhere in URL
+	Body    bool     `json:"body,omitempty"`    // allow anywhere in body
+}
+
 // KeyEntry represents a single key entry in the keystore.
 type KeyEntry struct {
-	URI            string `json:"uri"`
-	URLPrefix      string `json:"url_prefix"`
-	AllowURL       bool   `json:"allow_url"`
-	AllowBody      bool   `json:"allow_body"`
-	EncryptedValue string `json:"encrypted_value"` // base64-encoded salt||nonce||ciphertext
+	URI            string     `json:"uri"`
+	URLPrefix      string     `json:"url_prefix"`
+	AllowURL       bool       `json:"allow_url"`
+	AllowBody      bool       `json:"allow_body"`
+	AllowOnly      *Placement `json:"allow_only,omitempty"`
+	EncryptedValue string     `json:"encrypted_value"` // base64-encoded salt||nonce||ciphertext
 }
 
 // keysFile is the on-disk JSON structure.
@@ -32,6 +43,7 @@ type DecryptedKey struct {
 	URLPrefix string
 	AllowURL  bool
 	AllowBody bool
+	AllowOnly *Placement
 	Value     []byte // plaintext key value; caller must ZeroClear when done
 }
 
@@ -94,7 +106,7 @@ func (s *Store) save(kf *keysFile) error {
 }
 
 // Add encrypts a key value and adds it to the keystore.
-func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, value, passphrase []byte) error {
+func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, allowOnly *Placement, value, passphrase []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,6 +125,7 @@ func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, value, pass
 		URLPrefix:      urlPrefix,
 		AllowURL:       allowURL,
 		AllowBody:      allowBody,
+		AllowOnly:      allowOnly,
 		EncryptedValue: base64.StdEncoding.EncodeToString(encrypted),
 	}
 
@@ -143,6 +156,7 @@ func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, value, pass
 			URLPrefix: urlPrefix,
 			AllowURL:  allowURL,
 			AllowBody: allowBody,
+			AllowOnly: allowOnly,
 			Value:     valueCopy,
 		}
 		if replaced {
@@ -221,6 +235,7 @@ func (s *Store) List() ([]KeyEntry, error) {
 			URLPrefix: k.URLPrefix,
 			AllowURL:  k.AllowURL,
 			AllowBody: k.AllowBody,
+			AllowOnly: k.AllowOnly,
 		}
 	}
 	return result, nil
@@ -257,6 +272,7 @@ func (s *Store) DecryptAll(passphrase []byte) error {
 			URLPrefix: k.URLPrefix,
 			AllowURL:  k.AllowURL,
 			AllowBody: k.AllowBody,
+			AllowOnly: k.AllowOnly,
 			Value:     value,
 		})
 	}

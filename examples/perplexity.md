@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/perplexity/api-key https://api.perplexity.ai/
+./key-rest add --allow-only-header Authorization user1/perplexity/api-key https://api.perplexity.ai/
 # → Enter the key value: (enter Perplexity API key)
 ```
 

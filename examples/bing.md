@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/bing/api-key https://api.bing.microsoft.com/
+./key-rest add --allow-only-header Ocp-Apim-Subscription-Key user1/bing/api-key https://api.bing.microsoft.com/
 # → Enter the key value: (enter Azure Bing Search API Key)
 ```
 

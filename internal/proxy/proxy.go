@@ -120,16 +120,16 @@ func (p *Proxy) Handle(req *Request) *Response {
 	}
 
 	// Validate all key-rest:// URIs (url_prefix, field restrictions) without resolving
-	if err := p.validateField(req.URL, "url", req.URL); err != nil {
+	if err := p.validateField(req.URL, "url", "", req.URL); err != nil {
 		return toErrorResponse(err)
 	}
-	for _, v := range req.Headers {
-		if err := p.validateField(v, "headers", req.URL); err != nil {
+	for k, v := range req.Headers {
+		if err := p.validateField(v, "headers", k, req.URL); err != nil {
 			return toErrorResponse(err)
 		}
 	}
 	if req.Body != nil {
-		if err := p.validateField(*req.Body, "body", req.URL); err != nil {
+		if err := p.validateField(*req.Body, "body", "", req.URL); err != nil {
 			return toErrorResponse(err)
 		}
 	}
@@ -200,7 +200,8 @@ func (p *Proxy) Handle(req *Request) *Response {
 
 // validateField checks that all key-rest:// URIs in a field value pass
 // url_prefix and field restriction checks, without resolving actual values.
-func (p *Proxy) validateField(value, field, requestURL string) error {
+// fieldName is the header name (for field="headers") or empty for url/body.
+func (p *Proxy) validateField(value, field, fieldName, requestURL string) error {
 	matches := uri.FindAll(value)
 	for _, m := range matches {
 		for _, keyURI := range m.KeyURIs {
@@ -214,25 +215,162 @@ func (p *Proxy) validateField(value, field, requestURL string) error {
 					Message: fmt.Sprintf("request URL does not match url_prefix for key '%s'", keyURI),
 				}
 			}
-			switch field {
-			case "url":
-				if !dk.AllowURL {
-					return &ProxyError{
-						Code:    "FIELD_NOT_ALLOWED",
-						Message: fmt.Sprintf("key '%s' is not allowed in URL (use --allow-url)", keyURI),
-					}
-				}
-			case "body":
-				if !dk.AllowBody {
-					return &ProxyError{
-						Code:    "FIELD_NOT_ALLOWED",
-						Message: fmt.Sprintf("key '%s' is not allowed in body (use --allow-body)", keyURI),
-					}
-				}
+			if err := checkPlacement(dk, field, fieldName, keyURI, value); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
+}
+
+// checkPlacement validates that a key-rest:// URI appears in an allowed location.
+func checkPlacement(dk *keystore.DecryptedKey, field, fieldName, keyURI, value string) error {
+	if dk.AllowOnly != nil {
+		return checkAllowOnly(dk.AllowOnly, field, fieldName, keyURI, value)
+	}
+	// Legacy mode: AllowURL/AllowBody flags
+	switch field {
+	case "url":
+		if !dk.AllowURL {
+			return &ProxyError{
+				Code:    "FIELD_NOT_ALLOWED",
+				Message: fmt.Sprintf("key '%s' is not allowed in URL (use --allow-only-url)", keyURI),
+			}
+		}
+	case "body":
+		if !dk.AllowBody {
+			return &ProxyError{
+				Code:    "FIELD_NOT_ALLOWED",
+				Message: fmt.Sprintf("key '%s' is not allowed in body (use --allow-only-body)", keyURI),
+			}
+		}
+	}
+	return nil
+}
+
+// checkAllowOnly validates placement using the new allow-only restrictions.
+func checkAllowOnly(p *keystore.Placement, field, fieldName, keyURI, value string) error {
+	switch field {
+	case "headers":
+		if len(p.Headers) == 0 {
+			return &ProxyError{
+				Code:    "FIELD_NOT_ALLOWED",
+				Message: fmt.Sprintf("key '%s' is not allowed in headers", keyURI),
+			}
+		}
+		for _, h := range p.Headers {
+			if strings.EqualFold(h, fieldName) {
+				return nil
+			}
+		}
+		return &ProxyError{
+			Code:    "FIELD_NOT_ALLOWED",
+			Message: fmt.Sprintf("key '%s' is only allowed in header(s): %s", keyURI, strings.Join(p.Headers, ", ")),
+		}
+	case "url":
+		if p.URL {
+			return nil
+		}
+		if len(p.Queries) > 0 {
+			if isInAllowedQuery(value, keyURI, p.Queries) {
+				return nil
+			}
+			return &ProxyError{
+				Code:    "FIELD_NOT_ALLOWED",
+				Message: fmt.Sprintf("key '%s' is only allowed in query parameter(s): %s", keyURI, strings.Join(p.Queries, ", ")),
+			}
+		}
+		return &ProxyError{
+			Code:    "FIELD_NOT_ALLOWED",
+			Message: fmt.Sprintf("key '%s' is not allowed in URL", keyURI),
+		}
+	case "body":
+		if p.Body {
+			return nil
+		}
+		if len(p.Fields) > 0 {
+			if isInAllowedField(value, keyURI, p.Fields) {
+				return nil
+			}
+			return &ProxyError{
+				Code:    "FIELD_NOT_ALLOWED",
+				Message: fmt.Sprintf("key '%s' is only allowed in body field(s): %s", keyURI, strings.Join(p.Fields, ", ")),
+			}
+		}
+		return &ProxyError{
+			Code:    "FIELD_NOT_ALLOWED",
+			Message: fmt.Sprintf("key '%s' is not allowed in body", keyURI),
+		}
+	}
+	return nil
+}
+
+// isInAllowedQuery checks if all occurrences of a key-rest:// URI in the URL
+// appear only in values of allowed query parameter names.
+func isInAllowedQuery(rawURL, keyURI string, allowedParams []string) bool {
+	// Extract query string from URL
+	qIdx := strings.Index(rawURL, "?")
+	if qIdx < 0 {
+		return false
+	}
+	queryStr := rawURL[qIdx+1:]
+	// Remove fragment
+	if fIdx := strings.Index(queryStr, "#"); fIdx >= 0 {
+		queryStr = queryStr[:fIdx]
+	}
+
+	keyPattern := "key-rest://" + keyURI
+	enclosedPattern := "{{ key-rest://" + keyURI
+
+	for _, param := range strings.Split(queryStr, "&") {
+		eqIdx := strings.Index(param, "=")
+		if eqIdx < 0 {
+			continue
+		}
+		name := param[:eqIdx]
+		val := param[eqIdx+1:]
+
+		if strings.Contains(val, keyPattern) || strings.Contains(val, enclosedPattern) {
+			allowed := false
+			for _, ap := range allowedParams {
+				if name == ap {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// isInAllowedField checks if all occurrences of a key-rest:// URI in the body
+// appear only in values of allowed top-level JSON field names.
+func isInAllowedField(body, keyURI string, allowedFields []string) bool {
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
+		return false
+	}
+
+	keyPattern := "key-rest://" + keyURI
+
+	for fieldName, rawVal := range parsed {
+		if strings.Contains(string(rawVal), keyPattern) {
+			allowed := false
+			for _, af := range allowedFields {
+				if fieldName == af {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // ParseRequest parses a JSON request from raw bytes.

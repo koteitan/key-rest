@@ -6,7 +6,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/discord/bot-token https://discord.com/
+./key-rest add --allow-only-header Authorization user1/discord/bot-token https://discord.com/
 # → キーの値を入力してください: (Discord Bot Token を入力)
 ```
 

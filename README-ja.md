@@ -55,7 +55,7 @@ sequenceDiagram
     D->>D: 秘密鍵をメモリに保持<br/>暗号化されたキーを復号
     D->>U: daemon started
 
-    U->>D: ./key-rest add user1/brave/api-key https://api.search.brave.com/
+    U->>D: ./key-rest add --allow-only-header X-Subscription-Token user1/brave/api-key https://api.search.brave.com/
     D->>U: キーの値を入力してください
     U->>D: (キー値を入力)
     D->>D: キーを暗号化してファイルに保存<br/>メモリにも保持
@@ -83,9 +83,13 @@ key-rest-daemon は REST API を呼び出すためのデーモンです。APP KE
   - key-rest-daemon が running 状態のときは、秘密鍵は入力する必要はありません。
   - そのあとに、キーの値を入力するように求められます。入力されたキーは暗号化されてファイルに保存されます。
   - オプション:
-    - `--allow-url` : URL 内での置換を許可します (クエリパラメータ認証用: Gemini, Trello 等)
-    - `--allow-body` : リクエストボディ内での置換を許可します (ボディ認証用: Tavily 等)
-    - デフォルトでは headers 内のみ置換が許可されます
+    - `--allow-only-header <name>` : 指定したヘッダー内のみ置換を許可します (例: `Authorization`, `X-Api-Key`)
+    - `--allow-only-query <name>` : 指定した URL クエリパラメータ内のみ置換を許可します (例: `key`, `token`)
+    - `--allow-only-field <name>` : 指定した JSON ボディフィールド内のみ置換を許可します (例: `api_key`)
+    - `--allow-only-url` : URL 内のどこでも置換を許可します (パス埋め込み用: Telegram 等)
+    - `--allow-only-body` : リクエストボディ内のどこでも置換を許可します
+    - `--allow-only-header/query/field` は複数指定可能です
+    - デフォルト (フラグなし) では headers 内のみ置換が許可されます (レガシーモード)
 - `./key-rest remove <key>` : key-rest-daemon からキーを削除します。
 - `./key-rest list` : key-rest-daemon に登録されているキーの一覧を表示します。
   - 出力例

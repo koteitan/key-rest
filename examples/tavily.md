@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/tavily/api-key https://api.tavily.com/
+./key-rest add --allow-only-field api_key user1/tavily/api-key https://api.tavily.com/
 # → Enter the key value: (enter Tavily API Key)
 ```
 

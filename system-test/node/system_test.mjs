@@ -110,7 +110,7 @@ async function main() {
       });
     }
 
-    // Bearer token services
+    // Bearer token services (--allow-only-header Authorization)
     for (const [uri, path] of [
       ['openai/api-key', '/openai/'], ['mistral/api-key', '/mistral/'],
       ['groq/api-key', '/groq/'], ['xai/api-key', '/xai/'],
@@ -120,30 +120,32 @@ async function main() {
       ['sentry/auth-token', '/sentry/'], ['line/channel-access-token', '/line/'],
       ['notion/api-key', '/notion/'], ['discord/bot-token', '/discord/'],
       ['linear/api-key', '/linear/'],
-    ]) addKey(uri, base + path);
+    ]) addKey(uri, base + path, '--allow-only-header', 'Authorization');
 
     // Custom header services
-    for (const [uri, path] of [
-      ['anthropic/api-key', '/anthropic/'], ['exa/api-key', '/exa/'],
-      ['brave/api-key', '/brave/'], ['gitlab/token', '/gitlab/'],
-      ['bing/api-key', '/bing/'],
-    ]) addKey(uri, base + path);
+    for (const [uri, path, header] of [
+      ['anthropic/api-key', '/anthropic/', 'X-Api-Key'],
+      ['exa/api-key', '/exa/', 'X-Api-Key'],
+      ['brave/api-key', '/brave/', 'X-Subscription-Token'],
+      ['gitlab/token', '/gitlab/', 'Private-Token'],
+      ['bing/api-key', '/bing/', 'Ocp-Apim-Subscription-Key'],
+    ]) addKey(uri, base + path, '--allow-only-header', header);
 
     // Query parameter services
-    for (const [uri, path] of [
-      ['gemini/api-key', '/gemini/'], ['google-search/api-key', '/google-search/'],
-      ['trello/api-key', '/trello/'], ['trello/token', '/trello/'],
-    ]) addKey(uri, base + path, '--allow-url');
+    addKey('gemini/api-key', base + '/gemini/', '--allow-only-query', 'key');
+    addKey('google-search/api-key', base + '/google-search/', '--allow-only-query', 'key');
+    addKey('trello/api-key', base + '/trello/', '--allow-only-query', 'key');
+    addKey('trello/token', base + '/trello/', '--allow-only-query', 'token');
 
     // Body field services
-    addKey('tavily/api-key', base + '/tavily/', '--allow-body');
+    addKey('tavily/api-key', base + '/tavily/', '--allow-only-field', 'api_key');
 
     // Path embedding services
-    addKey('telegram/bot-token', base + '/telegram/', '--allow-url');
+    addKey('telegram/bot-token', base + '/telegram/', '--allow-only-url');
 
     // Basic auth
-    addKey('atlassian/email', base + '/atlassian/');
-    addKey('atlassian/token', base + '/atlassian/');
+    addKey('atlassian/email', base + '/atlassian/', '--allow-only-header', 'Authorization');
+    addKey('atlassian/token', base + '/atlassian/', '--allow-only-header', 'Authorization');
 
     // Trust test-server cert (must be before daemon start)
     env.SSL_CERT_FILE = cert;
@@ -285,7 +287,7 @@ async function main() {
       const echoKeyValue = creds['openai/api-key'];
       // Register a key for the echo endpoint
       const echoInput = `${passphrase}\n${echoKeyValue}\n`;
-      execFileSync(keyRest, ['add', 'user1/echo/key', base + '/echo/'], {
+      execFileSync(keyRest, ['add', '--allow-only-header', 'Authorization', 'user1/echo/key', base + '/echo/'], {
         input: echoInput, env, stdio: 'pipe',
       });
 

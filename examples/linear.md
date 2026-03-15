@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/linear/api-key https://api.linear.app/
+./key-rest add --allow-only-header Authorization user1/linear/api-key https://api.linear.app/
 # → Enter the key value: (enter Linear API Key)
 ```
 

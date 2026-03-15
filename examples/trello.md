@@ -6,9 +6,9 @@
 
 ### Setup
 ```bash
-./key-rest add user1/trello/api-key https://api.trello.com/
+./key-rest add --allow-only-query key user1/trello/api-key https://api.trello.com/
 # → Enter the key value: (enter Trello API Key)
-./key-rest add user1/trello/token https://api.trello.com/
+./key-rest add --allow-only-query token user1/trello/token https://api.trello.com/
 # → Enter the key value: (enter Trello Token)
 ```
 

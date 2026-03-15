@@ -20,7 +20,7 @@ func TestAddAndList(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("test-passphrase")
 
-	err := store.Add("user1/brave/api-key", "https://api.search.brave.com/", false, false, []byte("brave-key-123"), pass)
+	err := store.Add("user1/brave/api-key", "https://api.search.brave.com/", false, false, nil, []byte("brave-key-123"), pass)
 	if err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}
@@ -48,12 +48,12 @@ func TestAddOverwrite(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
-	if err := store.Add("user1/key", "https://example.com/", false, false, []byte("val"), pass); err != nil {
+	if err := store.Add("user1/key", "https://example.com/", false, false, nil, []byte("val"), pass); err != nil {
 		t.Fatal(err)
 	}
 
 	// Overwrite with new value and different options
-	if err := store.Add("user1/key", "https://example2.com/", true, false, []byte("val2"), pass); err != nil {
+	if err := store.Add("user1/key", "https://example2.com/", true, false, nil, []byte("val2"), pass); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,8 +84,8 @@ func TestRemove(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
-	store.Add("user1/a", "https://a.com/", false, false, []byte("va"), pass)
-	store.Add("user1/b", "https://b.com/", false, false, []byte("vb"), pass)
+	store.Add("user1/a", "https://a.com/", false, false, nil, []byte("va"), pass)
+	store.Add("user1/b", "https://b.com/", false, false, nil, []byte("vb"), pass)
 
 	if err := store.Remove("user1/a"); err != nil {
 		t.Fatalf("Remove failed: %v", err)
@@ -112,8 +112,8 @@ func TestDecryptAllAndLookup(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
-	store.Add("user1/a", "https://a.com/", false, false, []byte("secret-a"), pass)
-	store.Add("user1/b", "https://b.com/", true, true, []byte("secret-b"), pass)
+	store.Add("user1/a", "https://a.com/", false, false, nil, []byte("secret-a"), pass)
+	store.Add("user1/b", "https://b.com/", true, true, nil, []byte("secret-b"), pass)
 
 	// Create a fresh store to simulate daemon restart
 	store2, _ := New(store.dir)
@@ -152,7 +152,7 @@ func TestDecryptAllWrongPassphrase(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("correct")
 
-	store.Add("user1/key", "https://example.com/", false, false, []byte("secret"), pass)
+	store.Add("user1/key", "https://example.com/", false, false, nil, []byte("secret"), pass)
 
 	store2, _ := New(store.dir)
 	err := store2.DecryptAll([]byte("wrong"))
@@ -165,7 +165,7 @@ func TestClearAll(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
-	store.Add("user1/key", "https://example.com/", false, false, []byte("secret"), pass)
+	store.Add("user1/key", "https://example.com/", false, false, nil, []byte("secret"), pass)
 	store.DecryptAll(pass)
 
 	store.ClearAll()
@@ -178,7 +178,7 @@ func TestClearAll(t *testing.T) {
 func TestFilePermissions(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
-	store.Add("user1/key", "https://example.com/", false, false, []byte("val"), pass)
+	store.Add("user1/key", "https://example.com/", false, false, nil, []byte("val"), pass)
 
 	info, err := os.Stat(filepath.Join(store.dir, "keys.enc"))
 	if err != nil {
@@ -194,11 +194,11 @@ func TestAddWhileDaemonRunning(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
-	store.Add("user1/a", "https://a.com/", false, false, []byte("val-a"), pass)
+	store.Add("user1/a", "https://a.com/", false, false, nil, []byte("val-a"), pass)
 	store.DecryptAll(pass)
 
 	// Add a new key while decrypted keys are in memory
-	store.Add("user1/b", "https://b.com/", false, false, []byte("val-b"), pass)
+	store.Add("user1/b", "https://b.com/", false, false, nil, []byte("val-b"), pass)
 
 	dk := store.Lookup("user1/b")
 	if dk == nil {
@@ -213,8 +213,8 @@ func TestRemoveWhileDaemonRunning(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")
 
-	store.Add("user1/a", "https://a.com/", false, false, []byte("val-a"), pass)
-	store.Add("user1/b", "https://b.com/", false, false, []byte("val-b"), pass)
+	store.Add("user1/a", "https://a.com/", false, false, nil, []byte("val-a"), pass)
+	store.Add("user1/b", "https://b.com/", false, false, nil, []byte("val-b"), pass)
 	store.DecryptAll(pass)
 
 	store.Remove("user1/a")

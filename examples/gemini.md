@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/gemini/api-key https://generativelanguage.googleapis.com/
+./key-rest add --allow-only-query key user1/gemini/api-key https://generativelanguage.googleapis.com/
 # → Enter the key value: (enter Gemini API key)
 ```
 

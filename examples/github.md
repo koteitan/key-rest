@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/github/token https://api.github.com/
+./key-rest add --allow-only-header Authorization user1/github/token https://api.github.com/
 # → Enter the key value: (enter GitHub Personal Access Token)
 ```
 

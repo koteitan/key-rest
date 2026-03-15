@@ -6,7 +6,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/groq/api-key https://api.groq.com/
+./key-rest add --allow-only-header Authorization user1/groq/api-key https://api.groq.com/
 # → キーの値を入力してください: (Groq API key を入力)
 ```
 

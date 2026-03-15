@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/anthropic/api-key https://api.anthropic.com/
+./key-rest add --allow-only-header X-Api-Key user1/anthropic/api-key https://api.anthropic.com/
 # → Enter the key value: (enter Anthropic API key)
 ```
 

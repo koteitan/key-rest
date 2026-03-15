@@ -6,7 +6,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/anthropic/api-key https://api.anthropic.com/
+./key-rest add --allow-only-header X-Api-Key user1/anthropic/api-key https://api.anthropic.com/
 # → キーの値を入力してください: (Anthropic API key を入力)
 ```
 

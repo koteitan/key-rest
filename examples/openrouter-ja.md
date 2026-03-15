@@ -6,7 +6,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/openrouter/api-key https://openrouter.ai/
+./key-rest add --allow-only-header Authorization user1/openrouter/api-key https://openrouter.ai/
 # → キーの値を入力してください: (OpenRouter API key を入力)
 ```
 

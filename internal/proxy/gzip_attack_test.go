@@ -37,7 +37,7 @@ func TestAttack_GzipMaskingBypass(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := keystore.New(dir)
 	pass := []byte("p")
-	store.Add("user1/gzip/key", ts.URL+"/", false, false, []byte(credential), pass)
+	store.Add("user1/gzip/key", ts.URL+"/", false, false, nil, []byte(credential), pass)
 	store.DecryptAll(pass)
 
 	tlsConfig, addr := testTLSConfig(ts)

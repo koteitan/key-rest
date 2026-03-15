@@ -88,45 +88,45 @@ add_key() {
 
 BASE="https://localhost:$PORT"
 
-# Bearer token services
-add_key "openai/api-key"     "$BASE/openai/"
-add_key "mistral/api-key"    "$BASE/mistral/"
-add_key "groq/api-key"       "$BASE/groq/"
-add_key "xai/api-key"        "$BASE/xai/"
-add_key "perplexity/api-key" "$BASE/perplexity/"
-add_key "deepseek/api-key"   "$BASE/deepseek/"
-add_key "openrouter/api-key" "$BASE/openrouter/"
-add_key "github/token"       "$BASE/github/"
-add_key "matrix/access-token" "$BASE/matrix/"
-add_key "slack/bot-token"    "$BASE/slack/"
-add_key "sentry/auth-token"  "$BASE/sentry/"
-add_key "line/channel-access-token" "$BASE/line/"
-add_key "notion/api-key"     "$BASE/notion/"
-add_key "discord/bot-token"  "$BASE/discord/"
-add_key "linear/api-key"     "$BASE/linear/"
+# Bearer token services (--allow-only-header Authorization)
+add_key "openai/api-key"     "$BASE/openai/"     --allow-only-header Authorization
+add_key "mistral/api-key"    "$BASE/mistral/"    --allow-only-header Authorization
+add_key "groq/api-key"       "$BASE/groq/"       --allow-only-header Authorization
+add_key "xai/api-key"        "$BASE/xai/"        --allow-only-header Authorization
+add_key "perplexity/api-key" "$BASE/perplexity/" --allow-only-header Authorization
+add_key "deepseek/api-key"   "$BASE/deepseek/"   --allow-only-header Authorization
+add_key "openrouter/api-key" "$BASE/openrouter/" --allow-only-header Authorization
+add_key "github/token"       "$BASE/github/"     --allow-only-header Authorization
+add_key "matrix/access-token" "$BASE/matrix/"    --allow-only-header Authorization
+add_key "slack/bot-token"    "$BASE/slack/"       --allow-only-header Authorization
+add_key "sentry/auth-token"  "$BASE/sentry/"     --allow-only-header Authorization
+add_key "line/channel-access-token" "$BASE/line/" --allow-only-header Authorization
+add_key "notion/api-key"     "$BASE/notion/"     --allow-only-header Authorization
+add_key "discord/bot-token"  "$BASE/discord/"    --allow-only-header Authorization
+add_key "linear/api-key"     "$BASE/linear/"     --allow-only-header Authorization
 
 # Custom header services
-add_key "anthropic/api-key"  "$BASE/anthropic/"
-add_key "exa/api-key"        "$BASE/exa/"
-add_key "brave/api-key"      "$BASE/brave/"
-add_key "gitlab/token"       "$BASE/gitlab/"
-add_key "bing/api-key"       "$BASE/bing/"
+add_key "anthropic/api-key"  "$BASE/anthropic/"  --allow-only-header X-Api-Key
+add_key "exa/api-key"        "$BASE/exa/"        --allow-only-header X-Api-Key
+add_key "brave/api-key"      "$BASE/brave/"      --allow-only-header X-Subscription-Token
+add_key "gitlab/token"       "$BASE/gitlab/"     --allow-only-header Private-Token
+add_key "bing/api-key"       "$BASE/bing/"       --allow-only-header Ocp-Apim-Subscription-Key
 
 # Query parameter services
-add_key "gemini/api-key"       "$BASE/gemini/"       --allow-url
-add_key "google-search/api-key" "$BASE/google-search/" --allow-url
-add_key "trello/api-key"       "$BASE/trello/"       --allow-url
-add_key "trello/token"         "$BASE/trello/"       --allow-url
+add_key "gemini/api-key"       "$BASE/gemini/"       --allow-only-query key
+add_key "google-search/api-key" "$BASE/google-search/" --allow-only-query key
+add_key "trello/api-key"       "$BASE/trello/"       --allow-only-query key
+add_key "trello/token"         "$BASE/trello/"       --allow-only-query token
 
 # Body field services
-add_key "tavily/api-key"       "$BASE/tavily/"       --allow-body
+add_key "tavily/api-key"       "$BASE/tavily/"       --allow-only-field api_key
 
 # Path embedding services
-add_key "telegram/bot-token"   "$BASE/telegram/"     --allow-url
+add_key "telegram/bot-token"   "$BASE/telegram/"     --allow-only-url
 
 # Basic auth
-add_key "atlassian/email"      "$BASE/atlassian/"
-add_key "atlassian/token"      "$BASE/atlassian/"
+add_key "atlassian/email"      "$BASE/atlassian/"    --allow-only-header Authorization
+add_key "atlassian/token"      "$BASE/atlassian/"    --allow-only-header Authorization
 
 # Trust test-server cert (must be before daemon start so child inherits it)
 export SSL_CERT_FILE="$CERT"
@@ -302,7 +302,7 @@ echo ""
 
 ECHO_KEY_VALUE="${CREDS[openai/api-key]}"
 printf '%s\n%s\n' "$PASS" "$ECHO_KEY_VALUE" | \
-  "$WORK/key-rest" add "user1/echo/key" "$BASE/echo/" 2>/dev/null
+  "$WORK/key-rest" add --allow-only-header Authorization "user1/echo/key" "$BASE/echo/" 2>/dev/null
 
 TOTAL=$((TOTAL + 1))
 ECHO_OUTPUT=$("$CURL" "$BASE/echo/test" \

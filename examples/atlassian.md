@@ -6,9 +6,9 @@
 
 ### Setup
 ```bash
-./key-rest add user1/atlassian/email https://api.bitbucket.org/
+./key-rest add --allow-only-header Authorization user1/atlassian/email https://api.bitbucket.org/
 # → Enter the key value: (enter Atlassian email)
-./key-rest add user1/atlassian/token https://api.bitbucket.org/
+./key-rest add --allow-only-header Authorization user1/atlassian/token https://api.bitbucket.org/
 # → Enter the key value: (enter Atlassian API token)
 ```
 

@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/gitlab/token https://gitlab.com/
+./key-rest add --allow-only-header Private-Token user1/gitlab/token https://gitlab.com/
 # → Enter the key value: (enter GitLab Personal Access Token)
 ```
 

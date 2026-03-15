@@ -472,7 +472,7 @@ func TestAttack_DaemonProcMem(t *testing.T) {
 	// Register a key with a known credential value
 	credential := "DAEMON_ATTACK_TEST_KEY_" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	passphrase := []byte("test-passphrase")
-	err = store.Add("user1/attack/test-key", "https://example.com/", false, false, []byte(credential), passphrase)
+	err = store.Add("user1/attack/test-key", "https://example.com/", false, false, nil, []byte(credential), passphrase)
 	if err != nil {
 		t.Fatal(err)
 	}

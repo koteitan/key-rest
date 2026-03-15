@@ -4,7 +4,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/bing/api-key https://api.bing.microsoft.com/
+./key-rest add --allow-only-header Ocp-Apim-Subscription-Key user1/bing/api-key https://api.bing.microsoft.com/
 # → キーの値を入力してください: (Azure Bing Search API Key を入力)
 ```
 

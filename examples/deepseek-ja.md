@@ -6,7 +6,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/deepseek/api-key https://api.deepseek.com/
+./key-rest add --allow-only-header Authorization user1/deepseek/api-key https://api.deepseek.com/
 # → キーの値を入力してください: (DeepSeek API key を入力)
 ```
 

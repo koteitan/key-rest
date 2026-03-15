@@ -4,7 +4,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/line/channel-access-token https://api.line.me/
+./key-rest add --allow-only-header Authorization user1/line/channel-access-token https://api.line.me/
 # → キーの値を入力してください: (LINE Channel Access Token を入力)
 ```
 

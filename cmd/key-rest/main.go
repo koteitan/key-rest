@@ -18,7 +18,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.2.12"
+const version = "0.2.13"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -73,8 +73,14 @@ Commands:
   list                           List all keys
 
 Add options:
-  --allow-url    Allow replacement within URLs
-  --allow-body   Allow replacement within request body
+  --allow-only-header <header-name>  Allow replacement only in the specified header
+  --allow-only-query <query-name>   Allow replacement only in the specified query parameter
+  --allow-only-field <field-name>   Allow replacement only in the specified JSON body field
+  --allow-only-url            Allow replacement anywhere in the URL
+  --allow-only-body           Allow replacement anywhere in the request body
+
+Multiple flags can be specified; replacement is allowed in any of them (OR).
+If no flags are specified, replacement is allowed everywhere.
 `)
 }
 
@@ -146,28 +152,66 @@ func cmdStatus(dir string, store *keystore.Store) {
 
 func cmdAdd(store *keystore.Store, dir string) {
 	args := os.Args[2:]
-	allowURL := false
-	allowBody := false
+	var allowOnlyHeaders []string
+	var allowOnlyQueries []string
+	var allowOnlyFields []string
+	allowOnlyURL := false
+	allowOnlyBody := false
+	hasAllowOnly := false
 	var positional []string
 
-	for _, arg := range args {
-		switch arg {
-		case "--allow-url":
-			allowURL = true
-		case "--allow-body":
-			allowBody = true
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--allow-only-url":
+			allowOnlyURL = true
+			hasAllowOnly = true
+		case "--allow-only-body":
+			allowOnlyBody = true
+			hasAllowOnly = true
+		case "--allow-only-header":
+			i++
+			if i >= len(args) {
+				fatalf("--allow-only-header requires a header name\n")
+			}
+			allowOnlyHeaders = append(allowOnlyHeaders, args[i])
+			hasAllowOnly = true
+		case "--allow-only-query":
+			i++
+			if i >= len(args) {
+				fatalf("--allow-only-query requires a parameter name\n")
+			}
+			allowOnlyQueries = append(allowOnlyQueries, args[i])
+			hasAllowOnly = true
+		case "--allow-only-field":
+			i++
+			if i >= len(args) {
+				fatalf("--allow-only-field requires a field name\n")
+			}
+			allowOnlyFields = append(allowOnlyFields, args[i])
+			hasAllowOnly = true
 		default:
-			positional = append(positional, arg)
+			positional = append(positional, args[i])
 		}
 	}
 
 	if len(positional) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: key-rest add [--allow-url] [--allow-body] <key-uri> <url-prefix>\n")
+		fmt.Fprintf(os.Stderr, "Usage: key-rest add [options] <key-uri> <url-prefix>\n")
 		os.Exit(1)
 	}
 
 	keyURI := positional[0]
 	urlPrefix := positional[1]
+
+	var allowOnly *keystore.Placement
+	if hasAllowOnly {
+		allowOnly = &keystore.Placement{
+			Headers: allowOnlyHeaders,
+			Queries: allowOnlyQueries,
+			Fields:  allowOnlyFields,
+			URL:     allowOnlyURL,
+			Body:    allowOnlyBody,
+		}
+	}
 
 	// Check if daemon is running; if not, need passphrase
 	d := daemon.New(dir, store)
@@ -181,7 +225,7 @@ func cmdAdd(store *keystore.Store, dir string) {
 	crypto.Mlock(value)
 	defer crypto.ZeroClearAndMunlock(value)
 
-	if err := store.Add(keyURI, urlPrefix, allowURL, allowBody, value, passphrase); err != nil {
+	if err := store.Add(keyURI, urlPrefix, false, false, allowOnly, value, passphrase); err != nil {
 		fatalf("failed to add key: %v\n", err)
 	}
 
@@ -228,11 +272,29 @@ func cmdList(store *keystore.Store) {
 
 	for _, e := range entries {
 		flags := ""
-		if e.AllowURL {
-			flags += " [url]"
-		}
-		if e.AllowBody {
-			flags += " [body]"
+		if e.AllowOnly != nil {
+			if e.AllowOnly.URL {
+				flags += " [url]"
+			}
+			if e.AllowOnly.Body {
+				flags += " [body]"
+			}
+			for _, h := range e.AllowOnly.Headers {
+				flags += fmt.Sprintf(" [header:%s]", h)
+			}
+			for _, q := range e.AllowOnly.Queries {
+				flags += fmt.Sprintf(" [query:%s]", q)
+			}
+			for _, f := range e.AllowOnly.Fields {
+				flags += fmt.Sprintf(" [field:%s]", f)
+			}
+		} else {
+			if e.AllowURL {
+				flags += " [url]"
+			}
+			if e.AllowBody {
+				flags += " [body]"
+			}
 		}
 		fmt.Printf("%s: %s%s\n", e.URI, e.URLPrefix, flags)
 	}

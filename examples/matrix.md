@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/matrix/access-token https://matrix.example.org/
+./key-rest add --allow-only-header Authorization user1/matrix/access-token https://matrix.example.org/
 # → Enter the key value: (enter Matrix Access Token)
 ```
 

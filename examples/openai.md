@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/openai/api-key https://api.openai.com/
+./key-rest add --allow-only-header Authorization user1/openai/api-key https://api.openai.com/
 # → Enter the key value: (enter OpenAI API key)
 ```
 

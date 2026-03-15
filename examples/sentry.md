@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/sentry/auth-token https://sentry.io/
+./key-rest add --allow-only-header Authorization user1/sentry/auth-token https://sentry.io/
 # → Enter the key value: (enter Sentry Auth Token)
 ```
 

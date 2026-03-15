@@ -24,7 +24,7 @@ func setupServer(t *testing.T, ts *httptest.Server) (*Server, string) {
 
 	store, _ := keystore.New(dir)
 	pass := []byte("pass")
-	store.Add("user1/test/key", ts.URL+"/", false, false, []byte("real-key"), pass)
+	store.Add("user1/test/key", ts.URL+"/", false, false, nil, []byte("real-key"), pass)
 	store.DecryptAll(pass)
 
 	certPool := x509.NewCertPool()

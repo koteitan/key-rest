@@ -4,7 +4,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/brave/api-key https://api.search.brave.com/
+./key-rest add --allow-only-header X-Subscription-Token user1/brave/api-key https://api.search.brave.com/
 # → Enter the key value: (enter Brave API key)
 ```
 

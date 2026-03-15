@@ -4,7 +4,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/google/api-key https://www.googleapis.com/
+./key-rest add --allow-only-query key user1/google/api-key https://www.googleapis.com/
 # → キーの値を入力してください: (Google API Key を入力)
 ```
 

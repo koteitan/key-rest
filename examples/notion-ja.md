@@ -4,7 +4,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/notion/api-key https://api.notion.com/
+./key-rest add --allow-only-header Authorization user1/notion/api-key https://api.notion.com/
 # → キーの値を入力してください: (Notion Integration Token を入力)
 ```
 

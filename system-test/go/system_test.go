@@ -150,11 +150,10 @@ func startTestServer(t *testing.T, root string, port int, certPath, keyPath stri
 // --- Service test definitions ---
 
 type keyDef struct {
-	uri       string // key-rest URI identifier (e.g., "t/openai/api-key")
-	service   string // credential service name from test-server
-	label     string // credential label from test-server
-	allowURL  bool
-	allowBody bool
+	uri       string              // key-rest URI identifier (e.g., "t/openai/api-key")
+	service   string              // credential service name from test-server
+	label     string              // credential label from test-server
+	allowOnly *keystore.Placement // fine-grained placement restriction
 }
 
 type serviceTest struct {
@@ -172,89 +171,89 @@ func allServiceTests() []serviceTest {
 		{
 			name: "openai", method: "POST",
 			urlPath: "/openai/v1/chat/completions",
-			keys:    []keyDef{{uri: "t/openai/api-key", service: "openai", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/openai/api-key", service: "openai", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/openai/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"gpt-4o"}`,
 		},
 		{
 			name: "mistral", method: "POST",
 			urlPath: "/mistral/v1/chat/completions",
-			keys:    []keyDef{{uri: "t/mistral/api-key", service: "mistral", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/mistral/api-key", service: "mistral", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/mistral/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"mistral-large-latest"}`,
 		},
 		{
 			name: "groq", method: "POST",
 			urlPath: "/groq/openai/v1/chat/completions",
-			keys:    []keyDef{{uri: "t/groq/api-key", service: "groq", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/groq/api-key", service: "groq", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/groq/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"llama-3.3-70b-versatile"}`,
 		},
 		{
 			name: "xai", method: "POST",
 			urlPath: "/xai/v1/chat/completions",
-			keys:    []keyDef{{uri: "t/xai/api-key", service: "xai", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/xai/api-key", service: "xai", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/xai/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"grok-3"}`,
 		},
 		{
 			name: "perplexity", method: "POST",
 			urlPath: "/perplexity/chat/completions",
-			keys:    []keyDef{{uri: "t/perplexity/api-key", service: "perplexity", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/perplexity/api-key", service: "perplexity", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/perplexity/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"sonar"}`,
 		},
 		{
 			name: "deepseek", method: "POST",
 			urlPath: "/deepseek/chat/completions",
-			keys:    []keyDef{{uri: "t/deepseek/api-key", service: "deepseek", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/deepseek/api-key", service: "deepseek", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/deepseek/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"deepseek-chat"}`,
 		},
 		{
 			name: "openrouter", method: "POST",
 			urlPath: "/openrouter/api/v1/chat/completions",
-			keys:    []keyDef{{uri: "t/openrouter/api-key", service: "openrouter", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/openrouter/api-key", service: "openrouter", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/openrouter/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"anthropic/claude-sonnet-4-20250514"}`,
 		},
 		{
 			name: "github", method: "GET",
 			urlPath: "/github/user/repos",
-			keys:    []keyDef{{uri: "t/github/token", service: "github", label: "token"}},
+			keys:    []keyDef{{uri: "t/github/token", service: "github", label: "token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/github/token"},
 		},
 		{
 			name: "matrix", method: "POST",
 			urlPath: "/matrix/_matrix/client/v3/rooms/ROOM/send/m.room.message",
-			keys:    []keyDef{{uri: "t/matrix/access-token", service: "matrix", label: "access-token"}},
+			keys:    []keyDef{{uri: "t/matrix/access-token", service: "matrix", label: "access-token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/matrix/access-token", "Content-Type": "application/json"},
 			body:    `{"msgtype":"m.text","body":"test"}`,
 		},
 		{
 			name: "slack", method: "POST",
 			urlPath: "/slack/api/chat.postMessage",
-			keys:    []keyDef{{uri: "t/slack/bot-token", service: "slack", label: "bot-token"}},
+			keys:    []keyDef{{uri: "t/slack/bot-token", service: "slack", label: "bot-token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/slack/bot-token", "Content-Type": "application/json"},
 			body:    `{"channel":"C01234567","text":"test"}`,
 		},
 		{
 			name: "sentry", method: "GET",
 			urlPath: "/sentry/api/0/projects/",
-			keys:    []keyDef{{uri: "t/sentry/auth-token", service: "sentry", label: "auth-token"}},
+			keys:    []keyDef{{uri: "t/sentry/auth-token", service: "sentry", label: "auth-token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/sentry/auth-token"},
 		},
 		{
 			name: "line", method: "POST",
 			urlPath: "/line/v2/bot/message/push",
-			keys:    []keyDef{{uri: "t/line/channel-access-token", service: "line", label: "channel-access-token"}},
+			keys:    []keyDef{{uri: "t/line/channel-access-token", service: "line", label: "channel-access-token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/line/channel-access-token", "Content-Type": "application/json"},
 			body:    `{"to":"U1234567890","messages":[{"type":"text","text":"test"}]}`,
 		},
 		{
 			name: "notion", method: "POST",
 			urlPath: "/notion/v1/databases/DB/query",
-			keys:    []keyDef{{uri: "t/notion/api-key", service: "notion", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/notion/api-key", service: "notion", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bearer key-rest://t/notion/api-key", "Content-Type": "application/json"},
 			body:    `{}`,
 		},
@@ -262,47 +261,47 @@ func allServiceTests() []serviceTest {
 		{
 			name: "anthropic", method: "POST",
 			urlPath: "/anthropic/v1/messages",
-			keys:    []keyDef{{uri: "t/anthropic/api-key", service: "anthropic", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/anthropic/api-key", service: "anthropic", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"X-Api-Key"}}}},
 			headers: map[string]string{"X-Api-Key": "key-rest://t/anthropic/api-key", "Content-Type": "application/json"},
 			body:    `{"model":"claude-sonnet-4-20250514","max_tokens":1}`,
 		},
 		{
 			name: "exa", method: "POST",
 			urlPath: "/exa/search",
-			keys:    []keyDef{{uri: "t/exa/api-key", service: "exa", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/exa/api-key", service: "exa", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"X-Api-Key"}}}},
 			headers: map[string]string{"X-Api-Key": "key-rest://t/exa/api-key", "Content-Type": "application/json"},
 			body:    `{"query":"test","type":"neural"}`,
 		},
 		{
 			name: "brave", method: "GET",
 			urlPath: "/brave/res/v1/web/search?q=test",
-			keys:    []keyDef{{uri: "t/brave/api-key", service: "brave", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/brave/api-key", service: "brave", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"X-Subscription-Token"}}}},
 			headers: map[string]string{"X-Subscription-Token": "key-rest://t/brave/api-key"},
 		},
 		{
 			name: "gitlab", method: "GET",
 			urlPath: "/gitlab/api/v4/projects",
-			keys:    []keyDef{{uri: "t/gitlab/token", service: "gitlab", label: "token"}},
+			keys:    []keyDef{{uri: "t/gitlab/token", service: "gitlab", label: "token", allowOnly: &keystore.Placement{Headers: []string{"Private-Token"}}}},
 			headers: map[string]string{"Private-Token": "key-rest://t/gitlab/token"},
 		},
 		{
 			name: "bing", method: "GET",
 			urlPath: "/bing/v7.0/search?q=test",
-			keys:    []keyDef{{uri: "t/bing/api-key", service: "bing", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/bing/api-key", service: "bing", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Ocp-Apim-Subscription-Key"}}}},
 			headers: map[string]string{"Ocp-Apim-Subscription-Key": "key-rest://t/bing/api-key"},
 		},
 		// ---- Prefix/raw token services (2) ----
 		{
 			name: "discord", method: "POST",
 			urlPath: "/discord/api/v10/channels/CH/messages",
-			keys:    []keyDef{{uri: "t/discord/bot-token", service: "discord", label: "bot-token"}},
+			keys:    []keyDef{{uri: "t/discord/bot-token", service: "discord", label: "bot-token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "Bot key-rest://t/discord/bot-token", "Content-Type": "application/json"},
 			body:    `{"content":"test"}`,
 		},
 		{
 			name: "linear", method: "POST",
 			urlPath: "/linear/graphql",
-			keys:    []keyDef{{uri: "t/linear/api-key", service: "linear", label: "api-key"}},
+			keys:    []keyDef{{uri: "t/linear/api-key", service: "linear", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
 			headers: map[string]string{"Authorization": "key-rest://t/linear/api-key", "Content-Type": "application/json"},
 			body:    `{"query":"{ issues { nodes { id title } } }"}`,
 		},
@@ -310,28 +309,28 @@ func allServiceTests() []serviceTest {
 		{
 			name: "gemini", method: "POST",
 			urlPath: "/gemini/v1beta/models/gemini-2.0-flash:generateContent?key=key-rest://t/gemini/api-key",
-			keys:    []keyDef{{uri: "t/gemini/api-key", service: "gemini", label: "api-key", allowURL: true}},
+			keys:    []keyDef{{uri: "t/gemini/api-key", service: "gemini", label: "api-key", allowOnly: &keystore.Placement{Queries: []string{"key"}}}},
 			headers: map[string]string{"Content-Type": "application/json"},
 			body:    `{"contents":[{"parts":[{"text":"test"}]}]}`,
 		},
 		{
 			name: "google-search", method: "GET",
 			urlPath: "/google-search/customsearch/v1?key=key-rest://t/google-search/api-key",
-			keys:    []keyDef{{uri: "t/google-search/api-key", service: "google-search", label: "api-key", allowURL: true}},
+			keys:    []keyDef{{uri: "t/google-search/api-key", service: "google-search", label: "api-key", allowOnly: &keystore.Placement{Queries: []string{"key"}}}},
 		},
 		{
 			name: "trello", method: "GET",
 			urlPath: "/trello/1/members/me/boards?key=key-rest://t/trello/api-key&token=key-rest://t/trello/token",
 			keys: []keyDef{
-				{uri: "t/trello/api-key", service: "trello", label: "api-key", allowURL: true},
-				{uri: "t/trello/token", service: "trello", label: "token", allowURL: true},
+				{uri: "t/trello/api-key", service: "trello", label: "api-key", allowOnly: &keystore.Placement{Queries: []string{"key"}}},
+				{uri: "t/trello/token", service: "trello", label: "token", allowOnly: &keystore.Placement{Queries: []string{"token"}}},
 			},
 		},
 		// ---- Body field service (1) ----
 		{
 			name: "tavily", method: "POST",
 			urlPath: "/tavily/search",
-			keys:    []keyDef{{uri: "t/tavily/api-key", service: "tavily", label: "api-key", allowBody: true}},
+			keys:    []keyDef{{uri: "t/tavily/api-key", service: "tavily", label: "api-key", allowOnly: &keystore.Placement{Fields: []string{"api_key"}}}},
 			headers: map[string]string{"Content-Type": "application/json"},
 			body:    `{"api_key":"key-rest://t/tavily/api-key","query":"test","search_depth":"basic"}`,
 		},
@@ -339,7 +338,7 @@ func allServiceTests() []serviceTest {
 		{
 			name: "telegram", method: "POST",
 			urlPath: "/telegram/bot{{key-rest://t/telegram/bot-token}}/sendMessage",
-			keys:    []keyDef{{uri: "t/telegram/bot-token", service: "telegram", label: "bot-token", allowURL: true}},
+			keys:    []keyDef{{uri: "t/telegram/bot-token", service: "telegram", label: "bot-token", allowOnly: &keystore.Placement{URL: true}}},
 			headers: map[string]string{"Content-Type": "application/json"},
 			body:    `{"chat_id":123456789,"text":"test"}`,
 		},
@@ -348,8 +347,8 @@ func allServiceTests() []serviceTest {
 			name: "atlassian", method: "GET",
 			urlPath: "/atlassian/2.0/repositories/ws/repo/pullrequests",
 			keys: []keyDef{
-				{uri: "t/atlassian/email", service: "atlassian", label: "email"},
-				{uri: "t/atlassian/token", service: "atlassian", label: "token"},
+				{uri: "t/atlassian/email", service: "atlassian", label: "email", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}},
+				{uri: "t/atlassian/token", service: "atlassian", label: "token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}},
 			},
 			headers: map[string]string{
 				"Authorization": `Basic {{ base64(key-rest://t/atlassian/email, ":", key-rest://t/atlassian/token) }}`,
@@ -403,7 +402,7 @@ func TestAllServices(t *testing.T) {
 				t.Fatalf("credential not found: service=%q label=%q", k.service, k.label)
 			}
 			urlPrefix := baseURL + "/" + k.service + "/"
-			if err := store.Add(k.uri, urlPrefix, k.allowURL, k.allowBody, []byte(value), passphrase); err != nil {
+			if err := store.Add(k.uri, urlPrefix, false, false, k.allowOnly, []byte(value), passphrase); err != nil {
 				t.Fatalf("add key %s: %v", k.uri, err)
 			}
 		}
@@ -501,7 +500,7 @@ func TestResponseMasking(t *testing.T) {
 	if echoKeyValue == "" {
 		t.Fatal("credential not found for echo test")
 	}
-	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, []byte(echoKeyValue), passphrase); err != nil {
+	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(echoKeyValue), passphrase); err != nil {
 		t.Fatalf("add echo key: %v", err)
 	}
 	if err := store.DecryptAll(passphrase); err != nil {

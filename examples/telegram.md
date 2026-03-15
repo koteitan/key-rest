@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/telegram/bot-token https://api.telegram.org/
+./key-rest add --allow-only-url user1/telegram/bot-token https://api.telegram.org/
 # → Enter the key value: (enter Telegram Bot Token)
 ```
 

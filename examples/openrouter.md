@@ -6,7 +6,7 @@
 
 ### Setup
 ```bash
-./key-rest add user1/openrouter/api-key https://openrouter.ai/
+./key-rest add --allow-only-header Authorization user1/openrouter/api-key https://openrouter.ai/
 # → Enter the key value: (enter OpenRouter API key)
 ```
 

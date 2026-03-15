@@ -4,7 +4,7 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/exa/api-key https://api.exa.ai/
+./key-rest add --allow-only-header X-Api-Key user1/exa/api-key https://api.exa.ai/
 # → キーの値を入力してください: (Exa API Key を入力)
 ```
 

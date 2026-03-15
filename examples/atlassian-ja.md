@@ -6,9 +6,9 @@
 
 ### セットアップ
 ```bash
-./key-rest add user1/atlassian/email https://api.bitbucket.org/
+./key-rest add --allow-only-header Authorization user1/atlassian/email https://api.bitbucket.org/
 # → キーの値を入力してください: (Atlassian email を入力)
-./key-rest add user1/atlassian/token https://api.bitbucket.org/
+./key-rest add --allow-only-header Authorization user1/atlassian/token https://api.bitbucket.org/
 # → キーの値を入力してください: (Atlassian API token を入力)
 ```
 
