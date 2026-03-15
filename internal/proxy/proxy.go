@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -271,10 +272,22 @@ func hasURLPrefix(requestURL, prefix string) bool {
 
 // maskCredentials replaces any decrypted key values in s with their key-rest:// URIs.
 // It also masks JSON-escaped forms to prevent exfiltration via escaped reflection.
+// Credentials are sorted longest-first to prevent a short credential from
+// partially matching inside a longer one and leaking the remaining suffix.
 func (p *Proxy) maskCredentials(s string) string {
 	p.store.RLock()
-	defer p.store.RUnlock()
-	for _, dk := range p.store.Decrypted() {
+	decrypted := p.store.Decrypted()
+	p.store.RUnlock()
+
+	// Sort by credential value length (longest first) to prevent
+	// substring collisions from leaking partial credential data.
+	sorted := make([]keystore.DecryptedKey, len(decrypted))
+	copy(sorted, decrypted)
+	sort.Slice(sorted, func(i, j int) bool {
+		return len(sorted[i].Value) > len(sorted[j].Value)
+	})
+
+	for _, dk := range sorted {
 		if len(dk.Value) > 0 {
 			raw := string(dk.Value)
 			replacement := "key-rest://" + dk.URI

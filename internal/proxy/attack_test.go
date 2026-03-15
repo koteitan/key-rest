@@ -284,3 +284,70 @@ func TestAttack_PathTraversalPrefixBypass(t *testing.T) {
 
 	t.Logf("Response status: %d, body: %s", resp.Status, resp.Body)
 }
+
+// ==========================================================================
+// Attack 5: Substring masking collision
+//
+// If credential A is a substring of credential B (e.g., "sk-test" vs
+// "sk-test-secret"), masking A first would corrupt B's masking:
+//   "sk-test-secret" → "key-rest://user1/a-secret"
+// leaking the suffix "-secret". Sorting credentials longest-first prevents
+// this by ensuring B is fully masked before A is considered.
+// ==========================================================================
+
+func TestAttack_SubstringMaskingCollision(t *testing.T) {
+	const shortCred = "sk-test"
+	const longCred = "sk-test-secret-value"
+
+	// Mock server: echoes back both credentials
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(fmt.Sprintf(`{"short":"%s","long":"%s"}`, shortCred, longCred)))
+	}))
+	defer ts.Close()
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/short/key", ts.URL+"/", false, false, []byte(shortCred), pass)
+	store.Add("user1/long/key", ts.URL+"/", false, false, []byte(longCred), pass)
+	store.DecryptAll(pass)
+
+	tlsConfig, addr := testTLSConfig(ts)
+	p := NewForTest(store, tlsConfig, addr)
+
+	// Run multiple times since Go map iteration order is random;
+	// without the fix, some iterations would leak the suffix.
+	for i := 0; i < 50; i++ {
+		resp := p.Handle(&Request{
+			Type:   "http",
+			Method: "GET",
+			URL:    ts.URL + "/api/data",
+			Headers: map[string]string{
+				"Authorization": "Bearer key-rest://user1/short/key",
+			},
+		})
+
+		if resp.Error != nil {
+			t.Fatalf("request failed: %s", resp.Error.Message)
+		}
+
+		// Check: no raw credential values should appear
+		if strings.Contains(resp.Body, shortCred) {
+			t.Fatalf("VULNERABILITY: short credential leaked in response (iteration %d)", i)
+		}
+		if strings.Contains(resp.Body, longCred) {
+			t.Fatalf("VULNERABILITY: long credential leaked in response (iteration %d)", i)
+		}
+
+		// Check: the suffix after the short credential must not appear
+		// (this is the specific leak from substring collision)
+		suffix := longCred[len(shortCred):]
+		if strings.Contains(resp.Body, suffix) {
+			t.Fatalf("VULNERABILITY: partial credential suffix %q leaked (iteration %d)", suffix, i)
+		}
+	}
+
+	t.Log("Defense held: substring masking collision prevented across 50 iterations")
+}
