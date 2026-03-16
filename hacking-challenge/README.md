@@ -12,7 +12,7 @@
 - Target Environment:
   - The target client is the key-rest client and key-rest-daemon from the main branch at the time the issue is submitted.
   - The target server is a mock REST server on koteitan's local machine "ika".
-  - Source code is available at [test-server].
+  - Source code is available at [test-server](../test-server/).
   - Attacks that are effective against real-world servers but not against this mock REST server are considered unsuccessful for this challenge.
 - Verification Order:
   - The agent sushi-mage🍣 will verify credential exfiltration methods on koteitan's local machine "ika", in order of earliest submission time.
@@ -20,11 +20,11 @@
   - After the patch, the next earliest submitted issue's method will be verified.
 - Bounties:
   - Bounties will be paid to the BTC LN address listed in the issue that successfully exfiltrated credentials.
-  - 1st place: 10,000 sats 🥇
-  - 2nd place:  8,000 sats 🥈
-  - 3rd place:  6,000 sats 🥉
-  - 4th place:  4,000 sats
-  - 5th place:  2,000 sats
+  - 1st place: 10,000 sats 🥇 (no winner yet)
+  - 2nd place:  8,000 sats 🥈 (no winner yet)
+  - 3rd place:  6,000 sats 🥉 (no winner yet)
+  - 4th place:  4,000 sats    (no winner yet)
+  - 5th place:  2,000 sats    (no winner yet)
 - Deadline:
   - The deadline is tentatively set to 2026/4/15.
   - This period may be extended.
