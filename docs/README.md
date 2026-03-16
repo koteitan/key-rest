@@ -68,8 +68,8 @@ How key-rest intercepts and protects credentials in the Go HTTP client call chai
 
 - [Attacks on HTTP clients](http.md)
 
-### Self-replicating credentials
+### Key recreation
 
-Investigation of whether API credentials can be used to create new credentials via service APIs.
+Investigation of whether API credentials can be used to create new credentials of the same type via service APIs.
 
-- [Self-replicating credentials](self-replicating.md)
+- [Key recreation](key-recreation.md)
