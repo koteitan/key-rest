@@ -22,9 +22,6 @@ This document investigates whether key recreation is possible for each service's
 
 | Service | Credential | Details | Date |
 |---|---|---|---|
-| AWS | IAM access key | `CreateAccessKey` API can create a new key. Preventable by removing `iam:CreateAccessKey` from the IAM policy. | 2026-03-16 |
-| GCP | Service account key | `projects.serviceAccounts.keys.create` API can create a new key. Preventable by removing `iam.serviceAccountKeys.create` from the IAM role. | 2026-03-16 |
-| IBM Cloud | IAM API key | `POST /v1/apikeys` can create a new key. Preventable by enabling the "Restrict API key creation" account setting. | 2026-03-16 |
 | Cloudflare | API token | Token creation API exists. Preventable by not granting the `API Tokens Write` permission. | 2026-03-16 |
 | OpenAI | API key | Admin API Key can create keys via `POST /v1/organization/admin_api_keys`. Preventable by not granting admin keys. Regular project API keys have no creation endpoint. | 2026-03-16 |
 

@@ -290,6 +290,13 @@ func allServiceTests() []serviceTest {
 			keys:    []keyDef{{uri: "t/bing/api-key", service: "bing", label: "api-key", allowOnly: &keystore.Placement{Headers: []string{"Ocp-Apim-Subscription-Key"}}}},
 			headers: map[string]string{"Ocp-Apim-Subscription-Key": "key-rest://t/bing/api-key"},
 		},
+		// ---- Cloud services (1) ----
+		{
+			name: "cloudflare", method: "GET",
+			urlPath: "/cloudflare/client/v4/zones",
+			keys:    []keyDef{{uri: "t/cloudflare/api-token", service: "cloudflare", label: "api-token", allowOnly: &keystore.Placement{Headers: []string{"Authorization"}}}},
+			headers: map[string]string{"Authorization": "Bearer key-rest://t/cloudflare/api-token"},
+		},
 		// ---- Prefix/raw token services (2) ----
 		{
 			name: "discord", method: "POST",

@@ -6,7 +6,7 @@
 
 | パターン | サービス例 | 注入先 | 終端文字 |
 |----------|-----------|--------|----------|
-| `Authorization: Bearer <key>` | OpenAI, Mistral, Groq, xAI, DeepSeek, Perplexity, OpenRouter, GitHub, Slack, LINE, Matrix, Notion, Sentry | ヘッダー値 | 文字列末尾 |
+| `Authorization: Bearer <key>` | OpenAI, Mistral, Groq, xAI, DeepSeek, Perplexity, OpenRouter, GitHub, Slack, LINE, Matrix, Notion, Sentry, Cloudflare | ヘッダー値 | 文字列末尾 |
 | `Authorization: <key>` | Linear | ヘッダー値 | 文字列末尾 |
 | `Authorization: Bot <key>` | Discord | ヘッダー値 | 文字列末尾 |
 | `Authorization: Basic <user>:<pass>` | Atlassian | ヘッダー値 | `:` (有効文字外) |
@@ -47,6 +47,10 @@
 - [Telegram](telegram-ja.md)
 - [LINE](line-ja.md)
 - [Matrix](matrix-ja.md)
+
+## クラウド
+
+- [Cloudflare](cloudflare-ja.md)
 
 ## 開発ツール
 

@@ -623,6 +623,21 @@ func buildServices() (map[string]*mockService, []credEntry) {
 		})
 	}
 
+	// ---- Cloudflare ----
+	{
+		key := "test-cf-" + randHex(16)
+		add("cloudflare", &mockService{
+			creds:     []credEntry{{label: "api-token", value: key}},
+			checkAuth: bearerChecker(key),
+			onFail: func(w http.ResponseWriter) {
+				writeJSON(w, 401, M("success", false, "errors", []interface{}{M("code", 9109, "message", "Invalid access token")}))
+			},
+			onOK: func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, 200, M("success", true, "result", []interface{}{M("id", "test-zone-id", "name", "example.com", "status", "active")}))
+			},
+		})
+	}
+
 	// ---- Linear ----
 	{
 		key := "lin_api_test" + randHex(16)

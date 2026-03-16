@@ -6,7 +6,7 @@
 
 | Pattern | Services | Injection Target | Termination Character |
 |---------|----------|------------------|-----------------------|
-| `Authorization: Bearer <key>` | OpenAI, Mistral, Groq, xAI, DeepSeek, Perplexity, OpenRouter, GitHub, Slack, LINE, Matrix, Notion, Sentry | Header value | End of string |
+| `Authorization: Bearer <key>` | OpenAI, Mistral, Groq, xAI, DeepSeek, Perplexity, OpenRouter, GitHub, Slack, LINE, Matrix, Notion, Sentry, Cloudflare | Header value | End of string |
 | `Authorization: <key>` | Linear | Header value | End of string |
 | `Authorization: Bot <key>` | Discord | Header value | End of string |
 | `Authorization: Basic <user>:<pass>` | Atlassian | Header value | `:` (Outside valid chars) |
@@ -47,6 +47,10 @@
 - [Telegram](telegram.md)
 - [LINE](line.md)
 - [Matrix](matrix.md)
+
+## Cloud
+
+- [Cloudflare](cloudflare.md)
 
 ## Developer Tools
 
