@@ -1,4 +1,4 @@
-[English](attack.md) | [Japanese](attack-ja.md)
+[← Back](../README.md) | [English](README.md) | [Japanese](README-ja.md)
 
 # Attack Vector Analysis
 
@@ -11,7 +11,7 @@
 - Example: Including `key-rest://user1/slack/bot-token` in the text field of Slack's chat.postMessage causes the token plaintext to be posted to an attacker's channel
 - The same attack is possible with any service that has message-sending capability: Telegram, LINE, Discord, etc.
 - When a service has multiple keys, a key not used for authentication can be embedded in the body and stolen
-- **Mitigation**: Restrict which fields each key can be substituted into (headers: allowed by default, url/body: explicit opt-in) → Reflected in README.md
+- **Mitigation**: Restrict which fields each key can be substituted into (headers: allowed by default, url/body: explicit opt-in)
 
 ### 2. Key Leakage from Responses
 - Some APIs echo back request headers (= credentials) in error responses
@@ -59,3 +59,17 @@
 - File descriptor exhaustion
 - The daemon is intended to be used only by a local LLM agent, so external attacks are unlikely
 - **Mitigation**: Set a maximum concurrent connection limit
+
+## Deep Dives
+
+### Attacks on HTTP clients
+
+How key-rest intercepts and protects credentials in the Go HTTP client call chain.
+
+- [Attacks on HTTP clients](http.md)
+
+### Self-replicating credentials
+
+Investigation of whether API credentials can be used to create new credentials via service APIs.
+
+- [Self-replicating credentials](self-replicating.md)

@@ -1,4 +1,4 @@
-[English](attack.md) | [Japanese](attack-ja.md)
+[← Back](../README.md) | [English](README.md) | [Japanese](README-ja.md)
 
 # 想定攻撃リスト
 
@@ -11,7 +11,7 @@
 - 例: Slack の chat.postMessage の text に `key-rest://user1/slack/bot-token` を含めると、攻撃者のチャンネルにトークン平文が投稿される
 - Telegram, LINE, Discord など「メッセージ送信機能を持つサービス」すべてで同様の攻撃が可能
 - 同一サービスに複数キーがある場合、認証に使わないキーを body に埋め込んで窃取できる
-- **対策**: キーごとに置換可能なフィールドを制限する (headers: デフォルト許可, url/body: 明示的オプトイン) → README.md 反映済み
+- **対策**: キーごとに置換可能なフィールドを制限する (headers: デフォルト許可, url/body: 明示的オプトイン)
 
 ### 2. レスポンスからのキー漏洩
 - 一部の API はエラーレスポンスにリクエストヘッダー（= credential）をエコーバックする
@@ -59,3 +59,17 @@
 - ファイルディスクリプタの枯渇
 - daemon はローカルの LLM agent からのみ使用される想定なので、外部からの攻撃は成立しにくい
 - **対策**: 同時接続数の上限設定
+
+## 詳細調査
+
+### HTTP クライアントに対する攻撃
+
+key-rest が Go HTTP クライアントの呼び出しチェーン内でクレデンシャルをどのように傍受・保護するかについて。
+
+- [HTTP クライアントに対する攻撃](http-ja.md)
+
+### クレデンシャルの自己増殖
+
+API クレデンシャルを使って、同種の新しいクレデンシャルを作成できるかどうかの調査。
+
+- [クレデンシャルの自己増殖](self-replicating-ja.md)
