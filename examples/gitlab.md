@@ -8,6 +8,8 @@
 # → Enter the key value: (enter GitLab Personal Access Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/gitlab/token` in the `body` field of an issue note, causing the token to be posted. The agent could then read it back via the notes API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

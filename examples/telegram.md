@@ -10,6 +10,8 @@
 # → Enter the key value: (enter Telegram Bot Token)
 ```
 
+> **Security:** Without `--allow-only-url`, an agent could embed `key-rest://user1/telegram/bot-token` in the `text` field of `sendMessage`, causing the token to be sent as a chat message. The agent could then read it back via `getUpdates`.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

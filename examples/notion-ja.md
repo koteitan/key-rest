@@ -8,6 +8,8 @@
 # → キーの値を入力してください: (Notion Integration Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントがページコンテンツに `key-rest://user1/notion/api-key` を埋め込み、トークンが Notion ページに保存される可能性があります。エージェントは pages API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

@@ -8,6 +8,8 @@
 # → キーの値を入力してください: (LINE Channel Access Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントがプッシュメッセージの `text` フィールドに `key-rest://user1/line/channel-access-token` を埋め込み、トークンが LINE メッセージとして送信される可能性があります。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

@@ -8,6 +8,8 @@
 # → Enter the key value: (enter LINE Channel Access Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/line/channel-access-token` in the `text` field of a push message, causing the token to be sent as a LINE message.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

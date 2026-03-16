@@ -8,6 +8,8 @@
 # → Enter the key value: (enter Cloudflare API Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/cloudflare/api-token` in a DNS TXT record value, causing the token to be stored. The agent could then read it back via the zones API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

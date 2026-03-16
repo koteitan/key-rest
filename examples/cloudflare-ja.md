@@ -8,6 +8,8 @@
 # → キーの値を入力してください: (Cloudflare API Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが DNS TXT レコードの値に `key-rest://user1/cloudflare/api-token` を埋め込み、トークンが保存される可能性があります。エージェントは zones API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

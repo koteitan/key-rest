@@ -8,6 +8,8 @@
 # → Enter the key value: (enter Slack Bot Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/slack/bot-token` in the `text` field of `chat.postMessage`, causing the token to be posted as a message. The agent could then read it back via `conversations.history`.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

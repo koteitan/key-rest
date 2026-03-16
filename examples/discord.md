@@ -10,6 +10,8 @@
 # → Enter the key value: (enter Discord Bot Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/discord/bot-token` in the `content` field of a message POST, causing the token to be posted as a channel message. The agent could then read it back via `GET /channels/{id}/messages`.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

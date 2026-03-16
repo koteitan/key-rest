@@ -10,6 +10,8 @@
 # → Enter the key value: (enter Linear API Key)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/linear/api-key` in an issue description via GraphQL mutation, causing the key to be stored. The agent could then read it back via a query.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

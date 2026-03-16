@@ -10,6 +10,8 @@
 # → キーの値を入力してください: (Discord Bot Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントがメッセージ POST の `content` フィールドに `key-rest://user1/discord/bot-token` を埋め込み、トークンがチャンネルメッセージとして投稿される可能性があります。エージェントは `GET /channels/{id}/messages` でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

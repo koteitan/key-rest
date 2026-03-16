@@ -10,6 +10,8 @@
 # → Enter the key value: (enter Matrix Access Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/matrix/access-token` in the `body` field of a room message, causing the token to be posted to a room. The agent could then read it back via the sync or messages API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

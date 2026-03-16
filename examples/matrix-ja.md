@@ -10,6 +10,8 @@
 # → キーの値を入力してください: (Matrix Access Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントがルームメッセージの `body` フィールドに `key-rest://user1/matrix/access-token` を埋め込み、トークンがルームに投稿される可能性があります。エージェントは sync または messages API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

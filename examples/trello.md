@@ -12,6 +12,8 @@
 # → Enter the key value: (enter Trello Token)
 ```
 
+> **Security:** Without `--allow-only-query`, an agent could embed `key-rest://user1/trello/api-key` in a card description, causing the key to be stored in the card. The agent could then read it back via the cards API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

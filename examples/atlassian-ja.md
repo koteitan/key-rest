@@ -12,6 +12,8 @@
 # → キーの値を入力してください: (Atlassian API token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが PR コメントの本文にクレデンシャルを埋め込み、投稿される可能性があります。エージェントは comments API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

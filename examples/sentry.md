@@ -8,6 +8,8 @@
 # → Enter the key value: (enter Sentry Auth Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/sentry/auth-token` in an issue comment, causing the token to be stored. The agent could then read it back.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

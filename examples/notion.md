@@ -8,6 +8,8 @@
 # → Enter the key value: (enter Notion Integration Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/notion/api-key` in page content, causing the token to be stored in a Notion page. The agent could then read it back via the pages API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

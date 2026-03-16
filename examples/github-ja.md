@@ -8,6 +8,8 @@
 # → キーの値を入力してください: (GitHub Personal Access Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが issue コメント POST の `body` フィールドに `key-rest://user1/github/token` を埋め込み、トークンが公開される可能性があります。エージェントは issues API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

@@ -10,6 +10,8 @@
 # → キーの値を入力してください: (Linear API Key を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが GraphQL mutation で issue の説明に `key-rest://user1/linear/api-key` を埋め込み、キーが保存される可能性があります。エージェントは query でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

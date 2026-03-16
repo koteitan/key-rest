@@ -8,6 +8,8 @@
 # → Enter the key value: (enter GitHub Personal Access Token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed `key-rest://user1/github/token` in the `body` field of an issue comment POST, causing the token to be posted publicly. The agent could then read it back via the issues API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

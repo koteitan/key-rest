@@ -10,6 +10,8 @@
 # → キーの値を入力してください: (Telegram Bot Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-url` を付けない場合、エージェントが `sendMessage` の `text` フィールドに `key-rest://user1/telegram/bot-token` を埋め込み、トークンがチャットメッセージとして送信される可能性があります。エージェントは `getUpdates` でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

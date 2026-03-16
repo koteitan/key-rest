@@ -73,3 +73,9 @@ How key-rest intercepts and protects credentials in the Go HTTP client call chai
 Investigation of whether API credentials can be used to create new credentials of the same type via service APIs.
 
 - [Key recreation](key-recreation.md)
+
+### Credential exfiltration resistance
+
+Per-service analysis of whether `--allow-only-*` options prevent credential exfiltration via write-then-read attacks.
+
+- [Credential exfiltration resistance](exfiltration-resistance.md)

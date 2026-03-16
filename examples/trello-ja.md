@@ -12,6 +12,8 @@
 # → キーの値を入力してください: (Trello Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-query` を付けない場合、エージェントがカードの説明に `key-rest://user1/trello/api-key` を埋め込み、キーがカードに保存される可能性があります。エージェントは cards API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

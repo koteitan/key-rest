@@ -12,6 +12,8 @@
 # → Enter the key value: (enter Atlassian API token)
 ```
 
+> **Security:** Without `--allow-only-header`, an agent could embed credentials in a PR comment body, causing them to be posted. The agent could then read them back via the comments API.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

@@ -8,6 +8,8 @@
 # → キーの値を入力してください: (Slack Bot Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが `chat.postMessage` の `text` フィールドに `key-rest://user1/slack/bot-token` を埋め込み、トークンがメッセージとして投稿される可能性があります。エージェントは `conversations.history` でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

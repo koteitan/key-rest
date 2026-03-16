@@ -8,6 +8,8 @@
 # → キーの値を入力してください: (GitLab Personal Access Token を入力)
 ```
 
+> **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが issue ノートの `body` フィールドに `key-rest://user1/gitlab/token` を埋め込み、トークンが投稿される可能性があります。エージェントは notes API でそれを読み取れます。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';
