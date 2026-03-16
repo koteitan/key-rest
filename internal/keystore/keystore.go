@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/koteitan/key-rest/internal/crypto"
@@ -45,6 +46,17 @@ type DecryptedKey struct {
 	AllowBody bool
 	AllowOnly *Placement
 	Value     []byte // plaintext key value; caller must ZeroClear when done
+	Disabled  bool   // true if key is disabled (Value is nil)
+}
+
+// KeyStatus represents the runtime status of a key for listing.
+type KeyStatus struct {
+	URI       string     `json:"uri"`
+	URLPrefix string     `json:"url_prefix"`
+	AllowURL  bool       `json:"allow_url,omitempty"`
+	AllowBody bool       `json:"allow_body,omitempty"`
+	AllowOnly *Placement `json:"allow_only,omitempty"`
+	Disabled  bool       `json:"disabled"`
 }
 
 // Store manages the key-rest keystore.
@@ -311,6 +323,79 @@ func (s *Store) ClearAll() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.clearDecryptedLocked()
+}
+
+// Disable disables all decrypted keys whose URI starts with uriPrefix.
+// Zero-clears plaintext values immediately. Returns the number of keys disabled.
+func (s *Store) Disable(uriPrefix string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := 0
+	for i := range s.decrypted {
+		if strings.HasPrefix(s.decrypted[i].URI, uriPrefix) && !s.decrypted[i].Disabled {
+			crypto.ZeroClearAndMunlock(s.decrypted[i].Value)
+			s.decrypted[i].Value = nil
+			s.decrypted[i].Disabled = true
+			count++
+		}
+	}
+	return count
+}
+
+// Enable re-enables all decrypted keys whose URI starts with uriPrefix.
+// Re-decrypts values from the keys.enc file. Returns the number of keys enabled.
+func (s *Store) Enable(uriPrefix string, passphrase []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	kf, err := s.load()
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for i := range s.decrypted {
+		if strings.HasPrefix(s.decrypted[i].URI, uriPrefix) && s.decrypted[i].Disabled {
+			for _, ke := range kf.Keys {
+				if ke.URI == s.decrypted[i].URI {
+					raw, err := base64.StdEncoding.DecodeString(ke.EncryptedValue)
+					if err != nil {
+						return count, err
+					}
+					value, err := crypto.Decrypt(raw, passphrase)
+					if err != nil {
+						return count, err
+					}
+					crypto.Mlock(value)
+					s.decrypted[i].Value = value
+					s.decrypted[i].Disabled = false
+					count++
+					break
+				}
+			}
+		}
+	}
+	return count, nil
+}
+
+// ListStatus returns the runtime status of all decrypted keys.
+func (s *Store) ListStatus() []KeyStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]KeyStatus, len(s.decrypted))
+	for i, dk := range s.decrypted {
+		result[i] = KeyStatus{
+			URI:       dk.URI,
+			URLPrefix: dk.URLPrefix,
+			AllowURL:  dk.AllowURL,
+			AllowBody: dk.AllowBody,
+			AllowOnly: dk.AllowOnly,
+			Disabled:  dk.Disabled,
+		}
+	}
+	return result
 }
 
 func (s *Store) clearDecryptedLocked() {

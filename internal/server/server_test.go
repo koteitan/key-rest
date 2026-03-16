@@ -117,6 +117,79 @@ func TestServerHandleRequest(t *testing.T) {
 	}
 }
 
+func TestServerDisableEnable(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer ts.Close()
+
+	srv, socketPath := setupServer(t, ts)
+	srv.DisableHandler = func(uriPrefix string) int { return 1 }
+	srv.EnableHandler = func(uriPrefix string) (int, error) { return 1, nil }
+	srv.ListHandler = func() []keystore.KeyStatus {
+		return []keystore.KeyStatus{
+			{URI: "user1/test/key", URLPrefix: ts.URL + "/", Disabled: false},
+		}
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	sendAndCheck := func(reqJSON string) proxy.Response {
+		t.Helper()
+		conn, err := net.DialTimeout("unix", socketPath, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		conn.Write([]byte(reqJSON + "\n"))
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		scanner := bufio.NewScanner(conn)
+		if !scanner.Scan() {
+			t.Fatal("no response")
+		}
+		var resp proxy.Response
+		json.Unmarshal(scanner.Bytes(), &resp)
+		return resp
+	}
+
+	// Test disable
+	resp := sendAndCheck(`{"type":"disable","uri_prefix":"user1/test"}`)
+	if resp.Error != nil {
+		t.Fatalf("disable failed: %s", resp.Error.Message)
+	}
+	if resp.Body != "1" {
+		t.Fatalf("expected body '1', got %q", resp.Body)
+	}
+
+	// Test enable
+	resp = sendAndCheck(`{"type":"enable","uri_prefix":"user1/test"}`)
+	if resp.Error != nil {
+		t.Fatalf("enable failed: %s", resp.Error.Message)
+	}
+	if resp.Body != "1" {
+		t.Fatalf("expected body '1', got %q", resp.Body)
+	}
+
+	// Test list
+	resp = sendAndCheck(`{"type":"list"}`)
+	if resp.Error != nil {
+		t.Fatalf("list failed: %s", resp.Error.Message)
+	}
+	if resp.Body == "" || resp.Body == "null" {
+		t.Fatal("expected non-empty list body")
+	}
+
+	// Test disable without uri_prefix
+	resp = sendAndCheck(`{"type":"disable"}`)
+	if resp.Error == nil {
+		t.Fatal("expected error for missing uri_prefix")
+	}
+}
+
 func TestServerInvalidJSON(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer ts.Close()

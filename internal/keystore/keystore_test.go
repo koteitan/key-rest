@@ -209,6 +209,117 @@ func TestAddWhileDaemonRunning(t *testing.T) {
 	}
 }
 
+func TestDisable(t *testing.T) {
+	store := setupTestStore(t)
+	pass := []byte("pass")
+
+	store.Add("user1/openai/api-key", "https://api.openai.com/", false, false, nil, []byte("sk-abc"), pass)
+	store.Add("user1/openai/org-key", "https://api.openai.com/", false, false, nil, []byte("org-xyz"), pass)
+	store.Add("user1/github/token", "https://api.github.com/", false, false, nil, []byte("ghp-123"), pass)
+	store.DecryptAll(pass)
+
+	// Disable with prefix match
+	count := store.Disable("user1/openai")
+	if count != 2 {
+		t.Fatalf("expected 2 disabled, got %d", count)
+	}
+
+	// Disabled keys have nil Value and Disabled=true
+	dk := store.Lookup("user1/openai/api-key")
+	if dk == nil {
+		t.Fatal("Lookup should still return disabled key")
+	}
+	if !dk.Disabled {
+		t.Fatal("key should be disabled")
+	}
+	if dk.Value != nil {
+		t.Fatal("Value should be nil after disable")
+	}
+
+	// GitHub key unaffected
+	dk2 := store.Lookup("user1/github/token")
+	if dk2 == nil || dk2.Disabled {
+		t.Fatal("github key should not be disabled")
+	}
+	if string(dk2.Value) != "ghp-123" {
+		t.Fatalf("unexpected value: %q", dk2.Value)
+	}
+
+	// Double disable is a no-op
+	count2 := store.Disable("user1/openai")
+	if count2 != 0 {
+		t.Fatalf("expected 0 on double disable, got %d", count2)
+	}
+}
+
+func TestEnable(t *testing.T) {
+	store := setupTestStore(t)
+	pass := []byte("pass")
+
+	store.Add("user1/openai/api-key", "https://api.openai.com/", false, false, nil, []byte("sk-abc"), pass)
+	store.Add("user1/openai/org-key", "https://api.openai.com/", false, false, nil, []byte("org-xyz"), pass)
+	store.DecryptAll(pass)
+
+	store.Disable("user1/openai")
+
+	// Re-enable
+	count, err := store.Enable("user1/openai", pass)
+	if err != nil {
+		t.Fatalf("Enable failed: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 enabled, got %d", count)
+	}
+
+	dk := store.Lookup("user1/openai/api-key")
+	if dk == nil || dk.Disabled {
+		t.Fatal("key should be enabled")
+	}
+	if string(dk.Value) != "sk-abc" {
+		t.Fatalf("unexpected value after enable: %q", dk.Value)
+	}
+
+	dk2 := store.Lookup("user1/openai/org-key")
+	if dk2 == nil || dk2.Disabled {
+		t.Fatal("key should be enabled")
+	}
+	if string(dk2.Value) != "org-xyz" {
+		t.Fatalf("unexpected value after enable: %q", dk2.Value)
+	}
+}
+
+func TestListStatus(t *testing.T) {
+	store := setupTestStore(t)
+	pass := []byte("pass")
+
+	store.Add("user1/a", "https://a.com/", false, false, nil, []byte("va"), pass)
+	store.Add("user1/b", "https://b.com/", false, false, nil, []byte("vb"), pass)
+	store.DecryptAll(pass)
+
+	store.Disable("user1/b")
+
+	statuses := store.ListStatus()
+	if len(statuses) != 2 {
+		t.Fatalf("expected 2 statuses, got %d", len(statuses))
+	}
+
+	// Find each status
+	for _, s := range statuses {
+		switch s.URI {
+		case "user1/a":
+			if s.Disabled {
+				t.Fatal("user1/a should not be disabled")
+			}
+		case "user1/b":
+			if !s.Disabled {
+				t.Fatal("user1/b should be disabled")
+			}
+		default:
+			t.Fatalf("unexpected URI: %s", s.URI)
+		}
+	}
+}
+
 func TestRemoveWhileDaemonRunning(t *testing.T) {
 	store := setupTestStore(t)
 	pass := []byte("pass")

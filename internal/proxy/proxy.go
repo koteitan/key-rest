@@ -224,6 +224,9 @@ func (p *Proxy) validateField(value, field, fieldName, requestURL string) error 
 			if dk == nil {
 				return &ProxyError{Code: "KEY_NOT_FOUND", Message: fmt.Sprintf("key '%s' not found", keyURI)}
 			}
+			if dk.Disabled {
+				return &ProxyError{Code: "KEY_DISABLED", Message: fmt.Sprintf("the key '%s' is disabled", keyURI)}
+			}
 			if !hasURLPrefix(requestURL, dk.URLPrefix) {
 				return &ProxyError{
 					Code:    "URL_PREFIX_MISMATCH",

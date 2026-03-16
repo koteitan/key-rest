@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/proxy"
 )
 
@@ -18,15 +19,28 @@ const maxConcurrentConns = 64
 // ReloadFunc is called when a "reload" request is received.
 type ReloadFunc func() error
 
+// EnableFunc is called when an "enable" request is received.
+type EnableFunc func(uriPrefix string) (int, error)
+
+// DisableFunc is called when a "disable" request is received.
+type DisableFunc func(uriPrefix string) int
+
+// ListFunc is called when a "list" request is received.
+type ListFunc func() []keystore.KeyStatus
+
 // Server listens on a Unix domain socket and handles proxy requests.
 type Server struct {
-	socketPath    string
-	proxy         *proxy.Proxy
-	listener      net.Listener
-	wg            sync.WaitGroup
-	quit          chan struct{}
-	connSem       chan struct{} // semaphore for limiting concurrent connections
-	ReloadHandler ReloadFunc
+	socketPath     string
+	proxy          *proxy.Proxy
+	listener       net.Listener
+	wg             sync.WaitGroup
+	quit           chan struct{}
+	connSem        chan struct{} // semaphore for limiting concurrent connections
+	ReloadHandler  ReloadFunc
+	EnableHandler  EnableFunc
+	DisableHandler DisableFunc
+	ListHandler    ListFunc
+	Version        string
 }
 
 // New creates a new Server.
@@ -136,8 +150,21 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		if req.Type == "reload" {
+		switch req.Type {
+		case "reload":
 			s.handleReload(conn)
+			continue
+		case "enable":
+			s.handleEnableDisable(conn, line, true)
+			continue
+		case "disable":
+			s.handleEnableDisable(conn, line, false)
+			continue
+		case "list":
+			s.handleList(conn)
+			continue
+		case "version":
+			s.writeResponse(conn, &proxy.Response{Status: 200, Body: s.Version})
 			continue
 		}
 
@@ -160,6 +187,62 @@ func (s *Server) handleReload(conn net.Conn) {
 		return
 	}
 	s.writeResponse(conn, &proxy.Response{Status: 200, Body: "reloaded"})
+}
+
+func (s *Server) handleEnableDisable(conn net.Conn, line []byte, enable bool) {
+	var parsed struct {
+		URIPrefix string `json:"uri_prefix"`
+	}
+	if err := json.Unmarshal(line, &parsed); err != nil || parsed.URIPrefix == "" {
+		s.writeResponse(conn, &proxy.Response{
+			Error: &proxy.ErrorInfo{Code: "INVALID_REQUEST", Message: "uri_prefix is required"},
+		})
+		return
+	}
+
+	if enable {
+		if s.EnableHandler == nil {
+			s.writeResponse(conn, &proxy.Response{
+				Error: &proxy.ErrorInfo{Code: "INTERNAL_ERROR", Message: "enable not supported"},
+			})
+			return
+		}
+		count, err := s.EnableHandler(parsed.URIPrefix)
+		if err != nil {
+			s.writeResponse(conn, &proxy.Response{
+				Error: &proxy.ErrorInfo{Code: "ENABLE_FAILED", Message: err.Error()},
+			})
+			return
+		}
+		s.writeResponse(conn, &proxy.Response{Status: 200, Body: fmt.Sprintf("%d", count)})
+	} else {
+		if s.DisableHandler == nil {
+			s.writeResponse(conn, &proxy.Response{
+				Error: &proxy.ErrorInfo{Code: "INTERNAL_ERROR", Message: "disable not supported"},
+			})
+			return
+		}
+		count := s.DisableHandler(parsed.URIPrefix)
+		s.writeResponse(conn, &proxy.Response{Status: 200, Body: fmt.Sprintf("%d", count)})
+	}
+}
+
+func (s *Server) handleList(conn net.Conn) {
+	if s.ListHandler == nil {
+		s.writeResponse(conn, &proxy.Response{
+			Error: &proxy.ErrorInfo{Code: "INTERNAL_ERROR", Message: "list not supported"},
+		})
+		return
+	}
+	statuses := s.ListHandler()
+	body, err := json.Marshal(statuses)
+	if err != nil {
+		s.writeResponse(conn, &proxy.Response{
+			Error: &proxy.ErrorInfo{Code: "INTERNAL_ERROR", Message: err.Error()},
+		})
+		return
+	}
+	s.writeResponse(conn, &proxy.Response{Status: 200, Body: string(body)})
 }
 
 func (s *Server) writeResponse(conn net.Conn, resp *proxy.Response) {

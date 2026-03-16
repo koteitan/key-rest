@@ -936,6 +936,117 @@ func TestPathTraversalBlocked(t *testing.T) {
 	t.Fatalf("path traversal was not blocked — got status %d with body:\n%s", resp.StatusCode, truncate(body, 500))
 }
 
+// TestKeyDisableEnable verifies that disabled keys are rejected and
+// re-enabled keys work again.
+func TestKeyDisableEnable(t *testing.T) {
+	root := projectRoot(t)
+	port := findFreePort(t)
+	tmpDir := t.TempDir()
+
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	creds, cmd := startTestServer(t, root, port, certPath, keyPath)
+	defer cmd.Wait()
+	defer cmd.Process.Kill()
+
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read cert: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(certPEM) {
+		t.Fatal("failed to add test-server cert to pool")
+	}
+	tlsConfig := &tls.Config{RootCAs: certPool}
+
+	storeDir := filepath.Join(tmpDir, "keystore")
+	store, err := keystore.New(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	passphrase := []byte("system-test-passphrase")
+	baseURL := fmt.Sprintf("https://localhost:%d", port)
+
+	echoKeyValue := findCred(creds, "openai", "api-key")
+	if echoKeyValue == "" {
+		t.Fatal("credential not found")
+	}
+	if err := store.Add("t/echo/key", baseURL+"/echo/", false, false, &keystore.Placement{Headers: []string{"Authorization"}}, []byte(echoKeyValue), passphrase); err != nil {
+		t.Fatalf("add key: %v", err)
+	}
+	if err := store.DecryptAll(passphrase); err != nil {
+		t.Fatal(err)
+	}
+	defer store.ClearAll()
+
+	p := proxy.NewForTest(store, tlsConfig, "")
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	srv := server.New(socketPath, p)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	client := &keyrest.Client{SocketPath: socketPath}
+
+	// 1. Key works initially
+	t.Run("enabled", func(t *testing.T) {
+		req, _ := keyrest.NewRequest("GET", baseURL+"/echo/test", nil)
+		req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+	})
+
+	// 2. Disable the key
+	count := store.Disable("t/echo")
+	if count != 1 {
+		t.Fatalf("expected 1 disabled, got %d", count)
+	}
+
+	// 3. Key should be rejected
+	t.Run("disabled", func(t *testing.T) {
+		req, _ := keyrest.NewRequest("GET", baseURL+"/echo/test", nil)
+		req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+		_, err := client.Do(req)
+		if err == nil {
+			t.Fatal("expected error for disabled key")
+		}
+		if !strings.Contains(err.Error(), "KEY_DISABLED") {
+			t.Fatalf("expected KEY_DISABLED error, got: %v", err)
+		}
+	})
+
+	// 4. Re-enable the key
+	enabled, err := store.Enable("t/echo", passphrase)
+	if err != nil {
+		t.Fatalf("enable failed: %v", err)
+	}
+	if enabled != 1 {
+		t.Fatalf("expected 1 enabled, got %d", enabled)
+	}
+
+	// 5. Key works again
+	t.Run("re-enabled", func(t *testing.T) {
+		req, _ := keyrest.NewRequest("GET", baseURL+"/echo/test", nil)
+		req.Header.Set("Authorization", "Bearer key-rest://t/echo/key")
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("request failed after re-enable: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("expected 200, got %d", resp.StatusCode)
+		}
+	})
+}
+
 func truncate(b []byte, max int) string {
 	if len(b) <= max {
 		return string(b)

@@ -22,6 +22,7 @@ type Daemon struct {
 	store      *keystore.Store
 	server     *server.Server
 	passphrase []byte // held in memory for reload
+	Version    string // version string for protocol version check
 }
 
 // New creates a new Daemon.
@@ -108,6 +109,10 @@ func (d *Daemon) Start(passphrase []byte) error {
 	p := proxy.New(d.store)
 	d.server = server.New(d.socketPath(), p)
 	d.server.ReloadHandler = d.reload
+	d.server.EnableHandler = d.enable
+	d.server.DisableHandler = d.store.Disable
+	d.server.ListHandler = d.store.ListStatus
+	d.server.Version = d.Version
 	if err := d.server.Start(); err != nil {
 		os.Remove(d.pidPath())
 		d.store.ClearAll()
@@ -147,6 +152,10 @@ func (d *Daemon) Stop() error {
 
 func (d *Daemon) reload() error {
 	return d.store.DecryptAll(d.passphrase)
+}
+
+func (d *Daemon) enable(uriPrefix string) (int, error) {
+	return d.store.Enable(uriPrefix, d.passphrase)
 }
 
 func (d *Daemon) shutdown() {

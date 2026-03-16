@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,7 +20,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.3.2"
+const version = "0.3.3"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -50,8 +52,12 @@ func main() {
 		cmdAdd(store, dir)
 	case "remove":
 		cmdRemove(store, dir)
+	case "enable":
+		cmdEnable(dir)
+	case "disable":
+		cmdDisable(dir)
 	case "list":
-		cmdList(store)
+		cmdList(store, dir)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -71,6 +77,8 @@ Commands:
   add [options] <key-uri> <url-prefix>  Add a key
   remove <key-uri>               Remove a key
   list                           List all keys
+  enable <key-uri-prefix>        Enable keys matching the prefix
+  disable <key-uri-prefix>       Disable keys matching the prefix
 
 Add options:
   --allow-only-header <header-name>  Allow replacement only in the specified header
@@ -86,6 +94,7 @@ If no flags are specified, replacement is allowed everywhere.
 
 func cmdStart(dir string, store *keystore.Store) {
 	d := daemon.New(dir, store)
+	d.Version = version
 	if running, pid := d.IsRunning(); running {
 		fatalf("daemon is already running (PID %d)\n", pid)
 	}
@@ -145,6 +154,7 @@ func cmdStatus(dir string, store *keystore.Store) {
 	running, pid := d.IsRunning()
 	if running {
 		fmt.Printf("running (PID %d)\n", pid)
+		checkDaemonVersion(dir)
 	} else {
 		fmt.Println("stopped")
 	}
@@ -259,45 +269,210 @@ func cmdRemove(store *keystore.Store, dir string) {
 	}
 }
 
-func cmdList(store *keystore.Store) {
+func cmdList(store *keystore.Store, dir string) {
+	// If daemon is running, query it for runtime status (includes enabled/disabled)
+	d := daemon.New(dir, store)
+	if running, _ := d.IsRunning(); running {
+		checkDaemonVersion(dir)
+		statuses, err := sendList(dir)
+		if err != nil {
+			fatalf("failed to query daemon: %v\n", err)
+		}
+		if len(statuses) == 0 {
+			fmt.Println("no keys registered")
+			return
+		}
+		sort.Slice(statuses, func(i, j int) bool {
+			return statuses[i].URI < statuses[j].URI
+		})
+		for _, s := range statuses {
+			status := "enabled"
+			if s.Disabled {
+				status = "disabled"
+			}
+			fmt.Printf("key-rest://%s: %s %s%s\n", s.URI, s.URLPrefix, status, formatPlacement(s.AllowOnly, s.AllowURL, s.AllowBody))
+		}
+		return
+	}
+
+	// Daemon not running: read from file
 	entries, err := store.List()
 	if err != nil {
 		fatalf("failed to list keys: %v\n", err)
 	}
-
 	if len(entries) == 0 {
 		fmt.Println("no keys registered")
 		return
 	}
-
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].URI < entries[j].URI
+	})
 	for _, e := range entries {
-		flags := ""
-		if e.AllowOnly != nil {
-			if e.AllowOnly.URL {
-				flags += " [url]"
-			}
-			if e.AllowOnly.Body {
-				flags += " [body]"
-			}
-			for _, h := range e.AllowOnly.Headers {
-				flags += fmt.Sprintf(" [header:%s]", h)
-			}
-			for _, q := range e.AllowOnly.Queries {
-				flags += fmt.Sprintf(" [query:%s]", q)
-			}
-			for _, f := range e.AllowOnly.Fields {
-				flags += fmt.Sprintf(" [field:%s]", f)
-			}
-		} else {
-			if e.AllowURL {
-				flags += " [url]"
-			}
-			if e.AllowBody {
-				flags += " [body]"
-			}
-		}
-		fmt.Printf("%s: %s%s\n", e.URI, e.URLPrefix, flags)
+		fmt.Printf("key-rest://%s: %s%s\n", e.URI, e.URLPrefix, formatPlacement(e.AllowOnly, e.AllowURL, e.AllowBody))
 	}
+}
+
+func formatPlacement(allowOnly *keystore.Placement, allowURL, allowBody bool) string {
+	flags := ""
+	if allowOnly != nil {
+		if allowOnly.URL {
+			flags += " [url]"
+		}
+		if allowOnly.Body {
+			flags += " [body]"
+		}
+		for _, h := range allowOnly.Headers {
+			flags += fmt.Sprintf(" [header:%s]", h)
+		}
+		for _, q := range allowOnly.Queries {
+			flags += fmt.Sprintf(" [query:%s]", q)
+		}
+		for _, f := range allowOnly.Fields {
+			flags += fmt.Sprintf(" [field:%s]", f)
+		}
+	} else {
+		if allowURL {
+			flags += " [url]"
+		}
+		if allowBody {
+			flags += " [body]"
+		}
+	}
+	return flags
+}
+
+func cmdEnable(dir string) {
+	if len(os.Args) < 3 {
+		fatalf("Usage: key-rest enable <key-uri-prefix>\n")
+	}
+	checkDaemonVersion(dir)
+	uriPrefix := os.Args[2]
+	count, err := sendEnableDisable(dir, "enable", uriPrefix)
+	if err != nil {
+		fatalf("failed to enable: %v\n", err)
+	}
+	fmt.Printf("%d key(s) enabled\n", count)
+}
+
+func cmdDisable(dir string) {
+	if len(os.Args) < 3 {
+		fatalf("Usage: key-rest disable <key-uri-prefix>\n")
+	}
+	checkDaemonVersion(dir)
+	uriPrefix := os.Args[2]
+	count, err := sendEnableDisable(dir, "disable", uriPrefix)
+	if err != nil {
+		fatalf("failed to disable: %v\n", err)
+	}
+	fmt.Printf("%d key(s) disabled\n", count)
+}
+
+func checkDaemonVersion(dir string) {
+	socketPath := filepath.Join(dir, "key-rest.sock")
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	req := map[string]string{"type": "version"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	conn.Write(data)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		return
+	}
+
+	var resp struct {
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
+		return
+	}
+	if resp.Body != "" && resp.Body != version {
+		fmt.Fprintf(os.Stderr, "warning: daemon version %s does not match CLI version %s (restart daemon to update)\n", resp.Body, version)
+	}
+}
+
+func sendEnableDisable(dir, action, uriPrefix string) (int, error) {
+	socketPath := filepath.Join(dir, "key-rest.sock")
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
+	if err != nil {
+		return 0, fmt.Errorf("daemon not running or socket unavailable: %w", err)
+	}
+	defer conn.Close()
+
+	req := map[string]string{"type": action, "uri_prefix": uriPrefix}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	conn.Write(data)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		return 0, fmt.Errorf("no response from daemon")
+	}
+
+	var resp struct {
+		Status int `json:"status"`
+		Body   string `json:"body"`
+		Error  *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
+		return 0, err
+	}
+	if resp.Error != nil {
+		return 0, fmt.Errorf("[%s] %s", resp.Error.Code, resp.Error.Message)
+	}
+
+	count, _ := strconv.Atoi(resp.Body)
+	return count, nil
+}
+
+func sendList(dir string) ([]keystore.KeyStatus, error) {
+	socketPath := filepath.Join(dir, "key-rest.sock")
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	req := map[string]string{"type": "list"}
+	data, _ := json.Marshal(req)
+	data = append(data, '\n')
+	conn.Write(data)
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	scanner := bufio.NewScanner(conn)
+	if !scanner.Scan() {
+		return nil, fmt.Errorf("no response from daemon")
+	}
+
+	var resp struct {
+		Body  string `json:"body"`
+		Error *struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
+		return nil, err
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("[%s] %s", resp.Error.Code, resp.Error.Message)
+	}
+
+	var statuses []keystore.KeyStatus
+	if err := json.Unmarshal([]byte(resp.Body), &statuses); err != nil {
+		return nil, err
+	}
+	return statuses, nil
 }
 
 func sendReload(dir string) error {
