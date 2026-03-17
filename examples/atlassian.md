@@ -14,6 +14,8 @@
 
 > **Security:** Without `--allow-only-header`, an agent could embed credentials in a PR comment body, causing them to be posted. The agent could then read them back via the comments API.
 
+> **Warning (Data Center/Server only):** Atlassian Data Center PATs inherit the user's full permissions with no scope restriction. An agent can create a new PAT via `POST /rest/pat/latest/tokens` and the new token will not be in key-rest's credential store, bypassing response masking. This cannot be prevented by key-rest configuration.
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';

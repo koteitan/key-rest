@@ -14,6 +14,8 @@
 
 > **セキュリティ:** `--allow-only-header` を付けない場合、エージェントが PR コメントの本文にクレデンシャルを埋め込み、投稿される可能性があります。エージェントは comments API でそれを読み取れます。
 
+> **警告（Data Center/Server のみ）:** Atlassian Data Center の PAT はユーザーの全権限を継承し、スコープ制限がありません。エージェントは `POST /rest/pat/latest/tokens` で新しい PAT を作成でき、その新しいトークンは key-rest のクレデンシャルストアに存在しないため、レスポンスマスキングを回避できます。key-rest の設定では防止できません。
+
 ### Node.js
 ```javascript
 import { createFetch } from 'key-rest';
