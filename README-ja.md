@@ -122,7 +122,7 @@ key-uri のパス区切りは `/`、各セグメントの有効文字は `[a-zA-
 
 #### Unenclosed (囲みなし) と Enclosed (囲みあり)
 
-1Password CLI の secret reference syntax を参考に、2つの記法をサポートする。
+2つの記法をサポートする。
 
 **Unenclosed:** `key-rest://user1/service/key-name`
 - URI の終端は `[a-zA-Z0-9/_.-]` 以外の文字、または文字列末尾

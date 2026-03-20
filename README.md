@@ -120,7 +120,7 @@ Example: `key-rest://user1/service/key-name`, `key-rest://team/project/group/key
 
 #### Unenclosed and Enclosed
 
-Inspired by 1Password CLI's secret reference syntax, two notations are supported.
+Two notations are supported.
 
 **Unenclosed:** `key-rest://user1/service/key-name`
 - The end of the URI is determined by a character not in `[a-zA-Z0-9/_.-]`, or the end of the string
