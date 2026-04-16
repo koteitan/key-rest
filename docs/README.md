@@ -79,3 +79,9 @@ Investigation of whether API credentials can be used to create new credentials o
 Per-service analysis of whether `--allow-only-*` options prevent credential exfiltration via write-then-read attacks.
 
 - [Credential exfiltration resistance](exfiltration-resistance.md)
+
+### Credential memory lifecycle
+
+Traces the complete memory lifecycle of decrypted API keys, from decryption through TLS encryption and zero-clear.
+
+- [Credential memory lifecycle](memory.md)

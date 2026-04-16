@@ -207,27 +207,6 @@ const response = await fetch('https://api.example.com/data', {
 const data = await response.json();
 ```
 
-### key-rest-ws
-A WebSocket-compatible interface. It accepts the same arguments as WebSocket, injects keys, and establishes a WebSocket connection.
-
-```javascript
-import { createWebSocket } from 'key-rest';
-
-const WebSocket = createWebSocket();
-
-const ws = new WebSocket('wss://api.example.com/ws', {
-  headers: {
-    'Authorization': 'Bearer key-rest://user1/example/api-key'
-  }
-});
-
-ws.on('message', (data) => {
-  console.log(data);
-});
-```
-
-For WebSocket, the key-rest-daemon maintains the WebSocket connection and relays messages between the client.
-
 ## Go
 ### key-rest-http
 A net/http-compatible interface. It provides an API similar to http.Client and forwards requests to the key-rest-daemon. Responses are also returned in an `*http.Response`-compatible format.

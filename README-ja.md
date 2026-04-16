@@ -209,27 +209,6 @@ const response = await fetch('https://api.example.com/data', {
 const data = await response.json();
 ```
 
-### key-rest-ws
-WebSocket 互換のインターフェースです。WebSocket と同様の引数を受け取り、キーを注入して WebSocket 接続を確立します。
-
-```javascript
-import { createWebSocket } from 'key-rest';
-
-const WebSocket = createWebSocket();
-
-const ws = new WebSocket('wss://api.example.com/ws', {
-  headers: {
-    'Authorization': 'Bearer key-rest://user1/example/api-key'
-  }
-});
-
-ws.on('message', (data) => {
-  console.log(data);
-});
-```
-
-WebSocket の場合、key-rest-daemon が WebSocket 接続を維持し、クライアントとの間でメッセージを中継します。
-
 ## Go
 ### key-rest-http
 net/http 互換のインターフェースです。http.Client と同様の API を提供し、リクエストを key-rest-daemon に転送します。レスポンスも `*http.Response` 互換の形式で返します。
