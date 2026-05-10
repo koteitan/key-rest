@@ -85,3 +85,9 @@ Per-service analysis of whether `--allow-only-*` options prevent credential exfi
 Traces the complete memory lifecycle of decrypted API keys, from decryption through TLS encryption and zero-clear.
 
 - [Credential memory lifecycle](memory.md)
+
+### SPECA-style security audit
+
+Structured security audit applying the SPECA framework methodology (subgraphs, formal properties, proof-attempt) to key-rest. Records 9 functional units, 30 properties, and 3 confirmed findings with their fixes.
+
+- [SPECA-style audit](audit-speca.md)
