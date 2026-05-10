@@ -134,6 +134,12 @@ func (p *Proxy) Handle(req *Request) *Response {
 		return toErrorResponse(err)
 	}
 	for k, v := range req.Headers {
+		// Reject header names that aren't RFC 7230 tokens. Without this, a CRLF
+		// in the key would split into two wire headers, letting a credential
+		// land in an attacker-named header (F-001).
+		if !isValidHeaderName(k) {
+			return errorResponse("INVALID_REQUEST", fmt.Sprintf("invalid header name %q", k))
+		}
 		if err := p.validateField(v, "headers", k, req.URL); err != nil {
 			return toErrorResponse(err)
 		}

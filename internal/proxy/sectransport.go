@@ -27,6 +27,39 @@ func containsCRLF(b []byte) bool {
 	return false
 }
 
+// isValidHeaderNameByte reports whether b is a valid byte in an HTTP/1.1
+// header field name per RFC 7230 token rules (alphanumerics and a small
+// set of punctuation). Used to reject header keys that would inject extra
+// header lines if written verbatim onto the wire.
+func isValidHeaderNameByte(b byte) bool {
+	switch {
+	case b >= '0' && b <= '9':
+		return true
+	case b >= 'A' && b <= 'Z':
+		return true
+	case b >= 'a' && b <= 'z':
+		return true
+	}
+	switch b {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.',
+		'^', '_', '`', '|', '~':
+		return true
+	}
+	return false
+}
+
+func isValidHeaderName(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !isValidHeaderNameByte(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // secureTransport implements http.RoundTripper with delayed key replacement.
 type secureTransport struct {
 	resolver     uri.Resolver
