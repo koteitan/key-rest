@@ -67,3 +67,229 @@ go test -race -short ./internal/proxy
 ## Test-server
 
 `test-server/` provides a localhost HTTPS server that mocks every supported third-party service (OpenAI, Anthropic, Stripe, etc.). It is consumed by both system tests and (transitively, via the certificate) the hacking-challenge environment. The server itself has no `*_test.go` files — it is verified through the system-test suites that drive it.
+
+## Test tree
+
+Every `Test*` function across the project, grouped by file.
+
+- `clients/go/client_test.go`
+  - `TestClientDo`
+  - `TestClientError`
+  - `TestClientConnectionError`
+  - `TestNewClient`
+  - `TestClientPost`
+- `cmd/key-rest/main_pure_test.go`
+  - `TestFormatPlacementLegacyAllowURL`
+  - `TestFormatPlacementLegacyAllowBody`
+  - `TestFormatPlacementLegacyHeadersDefault`
+  - `TestFormatPlacementAllowOnlyMixed`
+  - `TestFormatPlacementAllowOnlyEmpty`
+- `cmd/key-rest/main_test.go` (subprocess)
+  - `TestVersionCommand`
+  - `TestStatusCommandStopped`
+  - `TestNoArgsShowsUsage`
+  - `TestUnknownCommand`
+  - `TestHelpCommand`
+  - `TestListCommandStopped`
+  - `TestStopWithoutRunningDaemon`
+- `internal/crypto/crypto_test.go`
+  - `TestEncryptDecrypt`
+  - `TestDecryptWrongPassphrase`
+  - `TestDecryptTooShort`
+  - `TestEncryptDifferentCiphertexts`
+  - `TestZeroClear`
+  - `TestDeriveKeyDeterministic`
+  - `TestDeriveKeyDifferentSalts`
+  - `TestEncryptEmptyPlaintext`
+  - `TestDecryptCorruptedData`
+  - `TestMlockMunlockEmpty`
+  - `TestMlockMunlockNonEmpty`
+  - `TestZeroClearAndMunlockEmpty`
+  - `TestZeroClearAndMunlockNonEmpty`
+- `internal/daemon/daemon_test.go`
+  - `TestNew`
+  - `TestPidAndSocketPath`
+  - `TestIsRunningNoPidFile`
+  - `TestIsRunningInvalidPidFile`
+  - `TestIsRunningStalePid`
+  - `TestIsRunningCurrentProcess`
+  - `TestStopNotRunning`
+  - `TestStopMissingProcess`
+  - `TestStopSendsSignal`
+  - `TestReloadHandler`
+  - `TestEnableHandler`
+  - `TestStartAlreadyRunning`
+  - `TestStartDecryptAllFails`
+  - `TestStartFullLifecycle`
+- `internal/daemon/process_attack_test.go`
+  - `TestAttack_ProcMemCredentialExtraction`
+  - `TestAttack_SIGQUITCrash`
+  - `TestAttack_SIGKILLNoCleanup`
+  - `TestAttack_PRSetDumpableNotSet`
+  - `TestAttack_ProcEnvironLeak`
+  - `TestAttack_DaemonProcMem`
+- `internal/keystore/keystore_test.go`
+  - `TestAddAndList`
+  - `TestAddOverwrite`
+  - `TestRemove`
+  - `TestRemoveNotFound`
+  - `TestDecryptAllAndLookup`
+  - `TestDecryptAllWrongPassphrase`
+  - `TestClearAll`
+  - `TestFilePermissions`
+  - `TestAddWhileDaemonRunning`
+  - `TestDisable`
+  - `TestEnable`
+  - `TestListStatus`
+  - `TestRemoveWhileDaemonRunning`
+- `internal/keystore/keystore_extra_test.go`
+  - `TestNewMkdirError`
+  - `TestDefaultDirEnv`
+  - `TestDefaultDirHome`
+  - `TestLoadCorruptedFile`
+  - `TestDecryptAllCorruptedFile`
+  - `TestDecryptAllCorruptedEncryptedValue`
+  - `TestRLockRUnlockDecrypted`
+  - `TestSaveErrorOnUnwritableDir`
+  - `TestEnableUnknownPrefix`
+  - `TestEnableCorruptedFile`
+  - `TestEnableInvalidEncryptedValue`
+  - `TestLoadNonNotExistError`
+  - `TestAddLoadCorruptedFile`
+  - `TestAddReplaceWhileDecrypted`
+  - `TestRemoveLoadCorruptedFile`
+  - `TestRemoveSaveError`
+  - `TestListLoadCorruptedFile`
+  - `TestEnableWrongPassphrase`
+- `internal/proxy/proxy_test.go`
+  - `TestHandleBasicRequest`
+  - `TestHandleKeyNotFound`
+  - `TestHandleFieldRestrictionURL`
+  - `TestHandleFieldRestrictionBody`
+  - `TestHandleAllowURL`
+  - `TestHandleAllowBody`
+  - `TestHandleHTTPRejected`
+  - `TestHandleURLPrefixMismatch`
+  - `TestHasURLPrefix`
+  - `TestHandleResponseMasking`
+  - `TestHandleUserinfoRejected`
+  - `TestHandleBase64TransformMasking`
+  - `TestHandleJSONEscapedMasking`
+  - `TestHandleInvalidType`
+- `internal/proxy/allowonly_test.go`
+  - `TestAllowOnlyHeader`
+  - `TestAllowOnlyHeaderCaseInsensitive`
+  - `TestAllowOnlyQuery`
+  - `TestAllowOnlyField`
+  - `TestAllowOnlyURLAndBody`
+  - `TestAttack_AllowOnlyContentEmbedding`
+  - `TestAllowOnlyMultipleHeaders`
+  - `TestLegacyModeBackwardsCompat`
+- `internal/proxy/attack_test.go`
+  - `TestAttack_URLEncodedMaskingBypass`
+  - `TestAttack_DoubleJSONEncodingBypass`
+  - `TestAttack_CRLFInjectionInURL`
+  - `TestAttack_PathTraversalPrefixBypass`
+  - `TestAttack_SubstringMaskingCollision`
+- `internal/proxy/gzip_attack_test.go`
+  - `TestAttack_GzipMaskingBypass`
+- `internal/proxy/coverage_test.go`
+  - `TestParseRequestValid`
+  - `TestParseRequestInvalid`
+  - `TestProxyErrorString`
+  - `TestToErrorResponseGenericError`
+  - `TestNewProxyConstructor`
+  - `TestCheckRedirectReturnsErrUseLastResponse`
+  - `TestDecompressBodyGzip`
+  - `TestDecompressBodyDeflate`
+  - `TestDecompressBodyBrotli`
+  - `TestDecompressBodyZstd`
+  - `TestDecompressBodyIdentity`
+  - `TestDecompressBodyUnknown`
+  - `TestDecompressBodyMalformed`
+  - `TestMaskPercentEncodedNoPercent`
+  - `TestMaskPercentEncodedDecodesAndMasks`
+  - `TestMaskPercentEncodedInvalidEscape`
+  - `TestMaskPercentEncodedNoCredentialAfterDecode`
+  - `TestContainsCRLFNone`
+  - `TestIsValidHeaderNameRejects`
+  - `TestHandleHTTPDoError`
+  - `TestIsInAllowedQueryNoQueryString`
+  - `TestIsInAllowedQueryParamWithoutEquals`
+  - `TestIsInAllowedQueryFragmentStripped`
+  - `TestIsInAllowedQueryRejectedParam`
+  - `TestIsInAllowedFieldRejected`
+  - `TestIsInAllowedFieldInvalidJSON`
+  - `TestMaskCredentialsEmptyValueSkipped`
+  - `TestRoundTripCRLFInResolvedValue`
+  - `TestContainsCRLFNewline`
+  - `TestIsValidHeaderNameByteRanges`
+- `internal/proxy/headerinject_poc_test.go` — F-001 regression
+  - `TestHeaderKeyInjectionRejected`
+  - `TestMethodCRLFInjectionRawWire`
+  - `TestURLCRLFInjectionRawWire`
+- `internal/proxy/raceattack_poc_test.go` — F-002 regression
+  - `TestDisableDuringRequestDoesNotLeak`
+  - `TestDisableDuringRequestNaturalTimingDoesNotLeak`
+- `internal/proxy/raceattack2_poc_test.go` — F-003 regression
+  - `TestReloadAfterTamperDoesNotLeak`
+- `internal/proxy/bodysmuggle_poc_test.go`
+  - `TestTransferEncodingStrippedFromWire`
+  - `TestValidationRaceDoesNotLeak`
+- `internal/server/server_test.go`
+  - `TestServerStartStop`
+  - `TestServerHandleRequest`
+  - `TestServerDisableEnable`
+  - `TestServerInvalidJSON`
+- `internal/server/server_extra_test.go`
+  - `TestServerEmptyLineIgnored`
+  - `TestServerVersion`
+  - `TestServerReloadSuccess`
+  - `TestServerReloadFailure`
+  - `TestServerReloadNoHandler`
+  - `TestServerEnableNoHandler`
+  - `TestServerEnableFailure`
+  - `TestServerDisableNoHandler`
+  - `TestServerListNoHandler`
+  - `TestServerStartDuplicateSocket`
+  - `TestServerStartListenFails`
+  - `TestServerConnectionSemFull`
+  - `TestServerHTTPHandled`
+- `internal/uri/uri_test.go`
+  - `TestFindAllUnenclosed`
+  - `TestFindAllEnclosed`
+  - `TestFindAllEnclosedTransform`
+  - `TestFindAllMultipleUnenclosed`
+  - `TestFindAllMixed`
+  - `TestFindAllNoMatch`
+  - `TestReplaceUnenclosed`
+  - `TestReplaceEnclosed`
+  - `TestReplaceBase64Transform`
+  - `TestReplaceMultipleUnenclosed`
+  - `TestReplaceResolverError`
+  - `TestReplaceNoMatch`
+  - `TestReplaceUnknownTransform`
+- `internal/uri/uri_bytes_test.go`
+  - `TestReplaceBytesUnenclosed`
+  - `TestReplaceBytesEnclosedTransform`
+  - `TestReplaceBytesNoMatch`
+  - `TestReplaceBytesResolverError`
+  - `TestReplaceBytesUnknownTransform`
+  - `TestReplaceBytesMultiArgsWithoutTransform`
+  - `TestResolveMatchMultiArgsWithoutTransform`
+  - `TestReplaceBytesPartialResolverFailure`
+  - `TestResolveMatchExportedAlias`
+  - `TestParseArgsMalformedString`
+  - `TestParseArgsTrailingComma`
+  - `TestParseArgsUnexpectedToken`
+  - `TestParseArgsEmpty`
+  - `TestFindAllEnclosedNonURI`
+  - `TestZeroClear`
+- `system-test/go/system_test.go`
+  - `TestAllServices`
+  - `TestResponseMasking`
+  - `TestCompressionMasking`
+  - `TestTruncatedKeyMasking`
+  - `TestPercentEncodedMasking`
+  - `TestPathTraversalBlocked`
+  - `TestKeyDisableEnable`
