@@ -91,3 +91,9 @@ API クレデンシャルを使って、同種の新しいクレデンシャル�
 SPECA フレームワークのメソドロジー (subgraphs, 形式的プロパティ, proof-attempt) を key-rest に適用した構造化セキュリティ監査。9 機能単位、30 プロパティ、3 件の確認済み finding と修正記録。
 
 - [SPECA メソドロジーによる監査](audit-speca-ja.md)
+
+### テスト構成
+
+key-rest のテスト構成: パッケージ単体テスト、複数言語システムテスト、セキュリティ PoC / regression テスト。
+
+- [テスト構成](testing-ja.md)
