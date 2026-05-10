@@ -172,6 +172,18 @@ func TestStartAlreadyRunning(t *testing.T) {
 	}
 }
 
+func TestStartDecryptAllFails(t *testing.T) {
+	d := newDaemon(t)
+	// Write a corrupted keys.enc so DecryptAll fails inside Start.
+	keysFile := filepath.Join(d.dir, "keys.enc")
+	if err := os.WriteFile(keysFile, []byte("not-json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Start([]byte("p")); err == nil {
+		t.Fatal("Start should fail when DecryptAll fails")
+	}
+}
+
 func TestStartFullLifecycle(t *testing.T) {
 	// Start the daemon, give it a moment to install its signal handler,
 	// then send SIGTERM. shutdown() should run and Start should return.

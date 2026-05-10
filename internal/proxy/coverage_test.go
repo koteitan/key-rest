@@ -244,3 +244,139 @@ func TestIsValidHeaderNameRejects(t *testing.T) {
 		t.Fatal("valid token rejected")
 	}
 }
+
+func TestHandleHTTPDoError(t *testing.T) {
+	// Use a closed listener address so client.Do returns a connection error.
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/k", "https://localhost/", false, false, nil, []byte("v"), pass)
+	store.DecryptAll(pass)
+
+	// NewForTest requires a tlsConfig; pass nil-equivalent and an unreachable address.
+	p := NewForTest(store, nil, "127.0.0.1:1") // port 1 reserved/unavailable
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "https://localhost/",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/k",
+		},
+	})
+	if resp.Error == nil || resp.Error.Code != "HTTP_ERROR" {
+		t.Fatalf("expected HTTP_ERROR, got %+v", resp.Error)
+	}
+}
+
+func TestIsInAllowedQueryNoQueryString(t *testing.T) {
+	// URL has no '?' — function returns false.
+	if isInAllowedQuery("https://e.com/path", "user1/k", []string{"key"}) {
+		t.Fatal("expected false for URL with no query")
+	}
+}
+
+func TestIsInAllowedQueryParamWithoutEquals(t *testing.T) {
+	// Query parameter without '=' is skipped (no leak).
+	url := "https://e.com/?flag&key=key-rest://user1/k"
+	if !isInAllowedQuery(url, "user1/k", []string{"key"}) {
+		t.Fatal("expected allowed when key is in approved param")
+	}
+}
+
+func TestIsInAllowedQueryFragmentStripped(t *testing.T) {
+	url := "https://e.com/?key=key-rest://user1/k#fragment"
+	if !isInAllowedQuery(url, "user1/k", []string{"key"}) {
+		t.Fatal("fragment should be stripped before query parsing")
+	}
+}
+
+func TestIsInAllowedQueryRejectedParam(t *testing.T) {
+	url := "https://e.com/?wrong=key-rest://user1/k"
+	if isInAllowedQuery(url, "user1/k", []string{"key"}) {
+		t.Fatal("expected rejection: key in unapproved param")
+	}
+}
+
+func TestIsInAllowedFieldRejected(t *testing.T) {
+	body := `{"wrong":"key-rest://user1/k"}`
+	if isInAllowedField(body, "user1/k", []string{"api_key"}) {
+		t.Fatal("expected rejection: key in unapproved field")
+	}
+}
+
+func TestIsInAllowedFieldInvalidJSON(t *testing.T) {
+	if isInAllowedField("not-json", "user1/k", []string{"f"}) {
+		t.Fatal("non-JSON body should be rejected")
+	}
+}
+
+func TestMaskCredentialsEmptyValueSkipped(t *testing.T) {
+	// A snapshot entry with empty value must not panic and must not match.
+	snap := []credSnapshot{
+		{uri: "user1/empty", value: []byte{}},
+		{uri: "user1/k", value: []byte("VAL")},
+	}
+	got := maskCredentials("VAL and tail", snap)
+	if !contains(got, "key-rest://user1/k") {
+		t.Fatalf("expected mask, got %q", got)
+	}
+}
+
+func contains(s, sub string) bool {
+	return strings.Contains(s, sub)
+}
+
+func TestRoundTripCRLFInResolvedValue(t *testing.T) {
+	// Register a credential whose VALUE itself contains a newline. The wire
+	// builder must reject the resolved header.
+	addr, tlsConfig, _, wg := rawTLSCapture(t)
+
+	dir := t.TempDir()
+	store, _ := keystore.New(dir)
+	pass := []byte("p")
+	store.Add("user1/k", "https://localhost/", false, false, nil, []byte("bad\rval"), pass)
+	store.DecryptAll(pass)
+
+	p := NewForTest(store, tlsConfig, addr)
+	resp := p.Handle(&Request{
+		Type:   "http",
+		Method: "GET",
+		URL:    "https://localhost/",
+		Headers: map[string]string{
+			"Authorization": "Bearer key-rest://user1/k",
+		},
+	})
+	go func() { wg.Wait() }()
+
+	if resp.Error == nil {
+		t.Fatal("expected an error response")
+	}
+	// We don't pin the exact error code — different layers may catch it.
+	if resp.Error.Code != "HTTP_ERROR" && resp.Error.Code != "INTERNAL_ERROR" {
+		t.Fatalf("unexpected code %q (msg=%q)", resp.Error.Code, resp.Error.Message)
+	}
+}
+
+func TestContainsCRLFNewline(t *testing.T) {
+	if !containsCRLF([]byte("ab\nc")) {
+		t.Fatal("\\n should be detected")
+	}
+	if !containsCRLF([]byte("ab\rc")) {
+		t.Fatal("\\r should be detected")
+	}
+}
+
+func TestIsValidHeaderNameByteRanges(t *testing.T) {
+	// Cover the upper / lower / digit branches plus a few of the punctuation
+	// branch members.
+	for _, b := range []byte("ABCabc012!#$%&'*+-.^_`|~") {
+		if !isValidHeaderNameByte(b) {
+			t.Fatalf("byte %q rejected", b)
+		}
+	}
+	for _, b := range []byte{'\r', '\n', ' ', ':', ';'} {
+		if isValidHeaderNameByte(b) {
+			t.Fatalf("byte %q should be rejected", b)
+		}
+	}
+}
