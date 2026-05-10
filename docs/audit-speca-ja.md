@@ -371,9 +371,8 @@ F-002 と同じ修正: validation 時に credential バイトをスナップシ�
 | `Disable` / `Reload` と `validateField` の race | Snapshot fix (commit `788937c`) で masker が validation 時の snapshot を使うため漏洩しない。P-014 参照。 |
 | Socket への同時接続/巨大行による DoS | 対象外 (DoS は credential exfil ではない)。10 MB リクエスト上限と 64 コネクション上限で影響を bound。P-016 / P-017 参照。 |
 | URI パーサの catastrophic backtracking | Go `regexp` は RE2 (線形時間)。P-018 参照。 |
-
-## 未監査のベクタ
-
-- **WebSocket**: 未実装 — [`README.md`](../README.md) 参照 (該当セクションは commit `42c2680` で削除)。
-- **Go の immutable string によるレスポンスマスキング残骸**: [`docs/memory.md`](memory.md) §Phase 4 で既出。Mask 後も平文 credential バイトが GC に回収されるまで heap に残る。本プロジェクトの脅威モデル下では悪用不可 (`PR_SET_DUMPABLE=0` で同一ユーザの `/proc/PID/mem` 読取りもブロック) だが、root やディスク forensics を脅威モデルに加えるなら `[]byte` ベースの mask 再実装が望ましい。
-- **Socket scanner への slow-loris**: agent が 64 個の同時接続を開いて改行を送らないと、connection semaphore を無期限に占有できる。DoS のみで本監査の bug-bounty スコープ外だが、コネクション毎の read deadline で締めるのが望ましい。
+| `s.decrypted` を変える操作と response masking の race (Disable, Reload, Disable→Enable→Disable 連打、複数並行 request 等) | Snapshot fix (commit `788937c`) により validation 時に取得した copy を mask に使う。`Add`/`Remove` は agent から socket 経由で呼べない (P-020)。 |
+| Go immutable string による response mask 残骸 | 本プロジェクトの脅威モデル下では悪用不可 (`PR_SET_DUMPABLE=0` で同一ユーザの `/proc/PID/mem` 読取りもブロック)。Root やディスク forensics を脅威モデルに加える場合は `[]byte` ベースの mask 再実装が望ましい。詳細は [`docs/memory.md`](memory.md) §Phase 4。 |
+| Socket scanner への slow-loris | DoS のみで bug-bounty スコープ外。コネクション毎の read deadline 追加が defense-in-depth として望ましい (P-017 で並行接続数自体は 64 で bound)。 |
+| Snapshot mlock 圧迫 (slow request × 並行) | DoS のみ。`RLIMIT_MEMLOCK` 設定と request timeout 30s で bound。 |
+| PID file race / multi-start race | 攻撃者は master passphrase なしには `key-rest start` できないため scope 外。 |

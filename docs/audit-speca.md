@@ -373,9 +373,8 @@ Same fix as F-002: snapshot the credential bytes at validation time and mask aga
 | `Disable` / `Reload` racing against `validateField` | Snapshot fix (commit `788937c`) ensures the masker uses the validation-time snapshot. See P-014. |
 | Concurrent connection / large-line DoS on the socket | Out of scope (DoS, not exfiltration). The 10 MB request cap and 64-connection ceiling bound the impact. See P-016 / P-017. |
 | Catastrophic backtracking in URI parser | Go `regexp` is RE2 (linear time). See P-018. |
-
-## Vectors not yet audited
-
-- **WebSocket**: not implemented — see [`README.md`](../README.md) (the section was removed in commit `42c2680`).
-- **Response-masking residues in Go's immutable strings**: documented in [`docs/memory.md`](memory.md) §Phase 4. These leave plaintext credential bytes in the GC heap until collected. Not exploitable under the project's threat model (`PR_SET_DUMPABLE=0` blocks same-user `/proc/PID/mem` reads), but worth a `[]byte`-based mask reimplementation if the threat model widens to include root or disk forensics.
-- **Slow-loris on the socket scanner**: an agent that opens 64 concurrent connections and never sends a newline can hold the connection semaphore indefinitely. DoS only — out of scope per the audit's bug-bounty scope, but worth tightening with a per-connection read deadline.
+| Race conditions on `s.decrypted` (Disable, Reload, Disable→Enable→Disable churn, parallel requests) | The snapshot fix (commit `788937c`) makes the masker operate on a per-request copy taken at validation time. `Add`/`Remove` are not reachable over the agent socket (P-020). |
+| Go immutable-string residues from response masking | Not exploitable under the project's threat model (`PR_SET_DUMPABLE=0` blocks same-user `/proc/PID/mem` reads). A `[]byte`-based mask reimplementation would be required if the threat model expanded to root or disk forensics. See [`docs/memory.md`](memory.md) §Phase 4. |
+| Slow-loris on the socket scanner | DoS only — out of scope. P-017 already bounds the parallel-connection count at 64; a per-connection read deadline would be appropriate defense-in-depth. |
+| Snapshot mlock pressure under many slow requests | DoS only; bounded by `RLIMIT_MEMLOCK` and the 30s request timeout. |
+| PID-file race / multi-start race | Out of scope — the attacker cannot run `key-rest start` without the master passphrase. |
