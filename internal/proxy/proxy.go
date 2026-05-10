@@ -21,9 +21,22 @@ import (
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 
+	"github.com/koteitan/key-rest/internal/crypto"
 	"github.com/koteitan/key-rest/internal/keystore"
 	"github.com/koteitan/key-rest/internal/uri"
 )
+
+// credSnapshot is a frozen view of one decrypted credential captured at
+// request validation time. The response masker operates on a slice of
+// snapshots so that mutations to the keystore between resolution and
+// masking (e.g. the unauthenticated `disable` and `reload` socket commands)
+// cannot remove a credential from the masker's set, which would otherwise
+// let the credential bytes be returned to the agent unmasked.
+type credSnapshot struct {
+	uri       string
+	urlPrefix string
+	value     []byte
+}
 
 // rawURLKey is the context key for passing the raw URL string to secureTransport.
 // This avoids url.Parse encoding characters like {{ }} that are needed for pattern matching.
@@ -73,11 +86,49 @@ func newClient(transport http.RoundTripper) *http.Client {
 
 func makeResolver(store *keystore.Store) uri.Resolver {
 	return func(keyURI string) ([]byte, error) {
-		dk := store.Lookup(keyURI)
-		if dk == nil {
-			return nil, fmt.Errorf("key '%s' not found", keyURI)
+		// Hold the read lock for the duration of the lookup AND the copy so
+		// concurrent mutations (Disable's ZeroClear, Reload's clearDecrypted)
+		// cannot race with the read of dk.Value's underlying buffer.
+		store.RLock()
+		defer store.RUnlock()
+		for _, dk := range store.Decrypted() {
+			if dk.URI != keyURI {
+				continue
+			}
+			if len(dk.Value) == 0 {
+				return nil, fmt.Errorf("key '%s' is not available", keyURI)
+			}
+			cpy := make([]byte, len(dk.Value))
+			copy(cpy, dk.Value)
+			return cpy, nil
 		}
-		return dk.Value, nil
+		return nil, fmt.Errorf("key '%s' not found", keyURI)
+	}
+}
+
+// snapshotCredentials returns an independent copy of every currently-decrypted
+// credential. The byte slices are mlocked, and the caller MUST call
+// clearSnapshot when finished so the copies are zero-cleared and munlocked.
+func (p *Proxy) snapshotCredentials() []credSnapshot {
+	p.store.RLock()
+	defer p.store.RUnlock()
+	decrypted := p.store.Decrypted()
+	out := make([]credSnapshot, 0, len(decrypted))
+	for _, dk := range decrypted {
+		if len(dk.Value) == 0 {
+			continue
+		}
+		v := make([]byte, len(dk.Value))
+		copy(v, dk.Value)
+		crypto.Mlock(v)
+		out = append(out, credSnapshot{uri: dk.URI, urlPrefix: dk.URLPrefix, value: v})
+	}
+	return out
+}
+
+func clearSnapshot(s []credSnapshot) {
+	for i := range s {
+		crypto.ZeroClearAndMunlock(s[i].value)
 	}
 }
 
@@ -150,6 +201,13 @@ func (p *Proxy) Handle(req *Request) *Response {
 		}
 	}
 
+	// Snapshot all currently-decrypted credentials. The masker uses this
+	// snapshot, not the live keystore, so concurrent disable / reload (both
+	// reachable over the unauthenticated socket protocol) cannot strip a
+	// credential from the masker's set after the request has gone out.
+	snapshot := p.snapshotCredentials()
+	defer clearSnapshot(snapshot)
+
 	// Collect transform outputs (e.g., base64-encoded values) for additional
 	// response masking. Raw credential masking alone cannot catch these.
 	transformOutputs := p.collectTransformOutputs(req)
@@ -198,17 +256,17 @@ func (p *Proxy) Handle(req *Request) *Response {
 	// Transform outputs (e.g., base64) are masked first, then raw credentials,
 	// then partial credential patterns (e.g., OpenAI truncated keys in errors).
 	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
-	respBodyStr = p.maskCredentials(respBodyStr)
-	respBodyStr = p.maskTruncatedKeys(respBodyStr)
-	respBodyStr = p.maskPercentEncoded(respBodyStr)
+	respBodyStr = maskCredentials(respBodyStr, snapshot)
+	respBodyStr = maskTruncatedKeys(respBodyStr, snapshot)
+	respBodyStr = maskPercentEncoded(respBodyStr, snapshot)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
 	for k := range resp.Header {
 		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
-		v = p.maskCredentials(v)
-		v = p.maskTruncatedKeys(v)
-		respHeaders[k] = p.maskPercentEncoded(v)
+		v = maskCredentials(v, snapshot)
+		v = maskTruncatedKeys(v, snapshot)
+		respHeaders[k] = maskPercentEncoded(v, snapshot)
 	}
 
 	return &Response{
@@ -442,36 +500,32 @@ func hasURLPrefix(requestURL, prefix string) bool {
 	return next == '/' || next == '?' || next == '#'
 }
 
-// maskCredentials replaces any decrypted key values in s with their key-rest:// URIs.
-// It also masks JSON-escaped forms to prevent exfiltration via escaped reflection.
-// Credentials are sorted longest-first to prevent a short credential from
-// partially matching inside a longer one and leaking the remaining suffix.
-func (p *Proxy) maskCredentials(s string) string {
-	p.store.RLock()
-	decrypted := p.store.Decrypted()
-	p.store.RUnlock()
-
-	// Sort by credential value length (longest first) to prevent
-	// substring collisions from leaking partial credential data.
-	sorted := make([]keystore.DecryptedKey, len(decrypted))
-	copy(sorted, decrypted)
+// maskCredentials replaces any credential values in the snapshot with their
+// key-rest:// URIs in s. It also masks JSON-escaped forms to prevent
+// exfiltration via escaped reflection. Credentials are sorted longest-first
+// to prevent a short credential from partially matching inside a longer one
+// and leaking the remaining suffix.
+func maskCredentials(s string, snapshot []credSnapshot) string {
+	sorted := make([]credSnapshot, len(snapshot))
+	copy(sorted, snapshot)
 	sort.Slice(sorted, func(i, j int) bool {
-		return len(sorted[i].Value) > len(sorted[j].Value)
+		return len(sorted[i].value) > len(sorted[j].value)
 	})
 
 	for _, dk := range sorted {
-		if len(dk.Value) > 0 {
-			raw := string(dk.Value)
-			replacement := "key-rest://" + dk.URI
-			// Mask JSON-escaped form first (longer, more specific)
-			jsonBytes, _ := json.Marshal(raw)
-			jsonEscaped := string(jsonBytes[1 : len(jsonBytes)-1])
-			if jsonEscaped != raw {
-				s = strings.ReplaceAll(s, jsonEscaped, replacement)
-			}
-			// Then mask raw form
-			s = strings.ReplaceAll(s, raw, replacement)
+		if len(dk.value) == 0 {
+			continue
 		}
+		raw := string(dk.value)
+		replacement := "key-rest://" + dk.uri
+		// Mask JSON-escaped form first (longer, more specific)
+		jsonBytes, _ := json.Marshal(raw)
+		jsonEscaped := string(jsonBytes[1 : len(jsonBytes)-1])
+		if jsonEscaped != raw {
+			s = strings.ReplaceAll(s, jsonEscaped, replacement)
+		}
+		// Then mask raw form
+		s = strings.ReplaceAll(s, raw, replacement)
 	}
 	return s
 }
@@ -487,18 +541,14 @@ var truncatedKeyPrefixes = []string{
 	"https://localhost",
 }
 
-func (p *Proxy) maskTruncatedKeys(s string) string {
-	p.store.RLock()
-	decrypted := p.store.Decrypted()
-	p.store.RUnlock()
-
-	for _, dk := range decrypted {
-		if len(dk.Value) < 8 {
+func maskTruncatedKeys(s string, snapshot []credSnapshot) string {
+	for _, dk := range snapshot {
+		if len(dk.value) < 8 {
 			continue
 		}
 		match := false
 		for _, pfx := range truncatedKeyPrefixes {
-			if strings.Contains(dk.URLPrefix, pfx) {
+			if strings.Contains(dk.urlPrefix, pfx) {
 				match = true
 				break
 			}
@@ -506,14 +556,14 @@ func (p *Proxy) maskTruncatedKeys(s string) string {
 		if !match {
 			continue
 		}
-		raw := string(dk.Value)
+		raw := string(dk.value)
 		// Pattern: first 2+ chars of key, then non-whitespace chars leading into
 		// 4+ asterisks, then the last 4 chars of the key.
 		// e.g., "sk-test-************************************abcd"
 		re := regexp.MustCompile(
 			regexp.QuoteMeta(raw[:2]) + `[^\s"]*?\*{4,}` + regexp.QuoteMeta(raw[len(raw)-4:]),
 		)
-		s = re.ReplaceAllString(s, "key-rest://"+dk.URI)
+		s = re.ReplaceAllString(s, "key-rest://"+dk.uri)
 	}
 	return s
 }
@@ -522,7 +572,7 @@ func (p *Proxy) maskTruncatedKeys(s string) string {
 // If the response contains '%', it URL-decodes the body and retries masking.
 // If masking finds credentials in the decoded form, the decoded+masked version
 // is returned; otherwise the original is kept unchanged.
-func (p *Proxy) maskPercentEncoded(s string) string {
+func maskPercentEncoded(s string, snapshot []credSnapshot) string {
 	if !strings.Contains(s, "%") {
 		return s
 	}
@@ -530,7 +580,7 @@ func (p *Proxy) maskPercentEncoded(s string) string {
 	if err != nil || decoded == s {
 		return s
 	}
-	masked := p.maskCredentials(decoded)
+	masked := maskCredentials(decoded, snapshot)
 	if masked != decoded {
 		return masked
 	}
