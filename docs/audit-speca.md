@@ -2,6 +2,8 @@
 
 # SPECA-style Security Audit of key-rest
 
+**Audit date**: 2026-05-10
+
 This document records a structured security audit of key-rest performed using the methodology of the [SPECA](https://github.com/NyxFoundation/speca) framework: derive formal properties from the specification (CLAUDE.md, README, threat model), then perform proof-attempt audits against the implementation. Findings are PoC-confirmed before reporting.
 
 ## Audit Summary

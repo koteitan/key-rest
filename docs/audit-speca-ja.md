@@ -2,6 +2,8 @@
 
 # key-rest の SPECA メソドロジーによるセキュリティ監査
 
+**実施日**: 2026-05-10
+
 [SPECA](https://github.com/NyxFoundation/speca) フレームワークのメソドロジーを用いた key-rest の構造化セキュリティ監査記録。仕様 (CLAUDE.md, README, 脅威モデル) から形式的プロパティを導出し、実装に対して proof-attempt 監査を行う。発見は PoC で確認してから報告。
 
 ## 監査サマリ
