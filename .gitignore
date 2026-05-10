@@ -6,3 +6,5 @@ __pycache__/
 commit-msg.txt
 test-server/test-server
 test-server/*.pem
+coverage.out
+coverage.html
