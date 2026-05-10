@@ -124,7 +124,12 @@ func (t *secureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	var resolvedHeaders []resolvedHeader
 	for key, vals := range req.Header {
-		if strings.EqualFold(key, "Host") || strings.EqualFold(key, "Content-Length") {
+		if strings.EqualFold(key, "Host") ||
+			strings.EqualFold(key, "Content-Length") ||
+			strings.EqualFold(key, "Transfer-Encoding") {
+			// Daemon controls request framing. Letting the agent inject
+			// Transfer-Encoding alongside the daemon-added Content-Length
+			// creates a CL.TE smuggling vector; strip it.
 			continue
 		}
 		for _, val := range vals {
