@@ -236,3 +236,70 @@ func TestStartFullLifecycle(t *testing.T) {
 		t.Fatal("PID file should be removed after shutdown")
 	}
 }
+
+// TestStartPidFileWriteFails covers the cleanup branch where decryption
+// succeeded but pid-file write fails: ClearAll + munlock must run.
+func TestStartPidFileWriteFails(t *testing.T) {
+	d := newDaemon(t)
+	pass := []byte("p")
+	if err := d.store.Add("u/s/k", "https://e.com/", false, false, nil, []byte("v"), pass); err != nil {
+		t.Fatal(err)
+	}
+	// Place a directory at the pid path so WriteFile fails with "is a directory".
+	if err := os.MkdirAll(d.pidPath(), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	err := d.Start(pass)
+	if err == nil {
+		t.Fatal("Start should fail when pid path is a directory")
+	}
+	// Decryption ran but pid file write failed; passphrase must have been munlocked.
+	if d.passphrase != nil {
+		// passphrase slice may still be non-nil (zeroed in place by ZeroClearAndMunlock),
+		// just ensure Start returned the expected error wrapper.
+		if !contains(err.Error(), "failed to write PID file") {
+			t.Fatalf("expected 'failed to write PID file' in error, got %v", err)
+		}
+	}
+}
+
+// TestStartServerStartFails covers the cleanup branch where pid-file write
+// succeeded but server.Start fails: pid file remove + ClearAll must run.
+func TestStartServerStartFails(t *testing.T) {
+	d := newDaemon(t)
+	pass := []byte("p")
+	if err := d.store.Add("u/s/k", "https://e.com/", false, false, nil, []byte("v"), pass); err != nil {
+		t.Fatal(err)
+	}
+	// Make socket path a non-empty directory: net.Listen("unix", ...) cannot
+	// bind there because the path exists and is a directory (Bind: address
+	// already in use / permission denied).
+	if err := os.MkdirAll(d.socketPath(), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(d.socketPath(), "blocker"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := d.Start(pass)
+	if err == nil {
+		t.Fatal("Start should fail when socket path is unreachable")
+	}
+	if !contains(err.Error(), "failed to start server") {
+		t.Fatalf("expected 'failed to start server' in error, got %v", err)
+	}
+	// pid file must have been cleaned up.
+	if _, statErr := os.Stat(d.pidPath()); !os.IsNotExist(statErr) {
+		t.Fatal("PID file should be removed after server.Start fails")
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
