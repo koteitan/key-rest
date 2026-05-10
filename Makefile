@@ -14,6 +14,10 @@ test-go:
 	go test $(shell go list ./... | grep -v system-test) -count=1 | grep -v '\[no test files\]'
 
 # Generate Go test coverage profile (excludes system-test which runs the real daemon).
+# Subprocess tests under cmd/key-rest are -cover-instrumented; their per-test
+# covdata directories are NOT yet merged into coverage.out because each lives
+# under t.TempDir() and is removed at end of the test. Inline tests of the
+# pure helpers cover the deterministic paths.
 coverage:
 	go test -coverprofile=coverage.out -covermode=atomic $(shell go list ./... | grep -v system-test)
 	@go tool cover -func=coverage.out | tail -1

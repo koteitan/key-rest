@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 )
@@ -70,9 +71,9 @@ func TestReloadAfterTamperDoesNotLeak(t *testing.T) {
 		responseBody = resp.Body
 	}()
 
-	// Let the request reach the upstream gate.
-	for i := 0; i < 100; i++ {
-	}
+	// Let the request reach the upstream gate. The goroutine must complete
+	// validation, snapshot, and the TLS write before we tamper with the store.
+	time.Sleep(100 * time.Millisecond)
 
 	// Tamper with keys.enc — remove target entry without the master passphrase.
 	keysEncPath := filepath.Join(dir, "keys.enc")

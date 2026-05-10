@@ -144,3 +144,32 @@ func TestDecryptCorruptedData(t *testing.T) {
 		t.Fatal("Decrypt should fail with corrupted ciphertext")
 	}
 }
+
+func TestMlockMunlockEmpty(t *testing.T) {
+	// Empty / nil slices are no-ops and must not panic.
+	Mlock(nil)
+	Mlock([]byte{})
+	Munlock(nil)
+	Munlock([]byte{})
+}
+
+func TestMlockMunlockNonEmpty(t *testing.T) {
+	b := make([]byte, 64)
+	Mlock(b)
+	Munlock(b)
+}
+
+func TestZeroClearAndMunlockEmpty(t *testing.T) {
+	ZeroClearAndMunlock(nil)
+	ZeroClearAndMunlock([]byte{})
+}
+
+func TestZeroClearAndMunlockNonEmpty(t *testing.T) {
+	b := []byte{1, 2, 3}
+	ZeroClearAndMunlock(b)
+	for _, v := range b {
+		if v != 0 {
+			t.Fatalf("not zeroed: %v", b)
+		}
+	}
+}
