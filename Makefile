@@ -11,15 +11,21 @@ test: test-unit test-system
 test-unit: test-go test-python test-node
 
 test-go:
-	go test $(shell go list ./... | grep -v system-test) -count=1 | grep -v '\[no test files\]'
+	go test $(shell go list ./... | grep -v -e system-test -e /scripts) -count=1 | grep -v '\[no test files\]'
 
 # Generate Go test coverage profile (excludes system-test which runs the real daemon).
 # Subprocess tests under cmd/key-rest are -cover-instrumented; their per-test
 # covdata directories are NOT yet merged into coverage.out because each lives
 # under t.TempDir() and is removed at end of the test. Inline tests of the
 # pure helpers cover the deterministic paths.
+#
+# Lines marked with `// cover:ignore` (defensive branches, os.Exit
+# fall-throughs, syscall failures) are stripped from the profile by
+# scripts/coverignore.go so they do not count against the totals.
 coverage:
-	go test -coverprofile=coverage.out -covermode=atomic $(shell go list ./... | grep -v system-test)
+	go test -coverprofile=coverage.out.raw -covermode=atomic $(shell go list ./... | grep -v -e system-test -e /scripts)
+	@go run scripts/coverignore.go coverage.out.raw > coverage.out
+	@rm coverage.out.raw
 	@go tool cover -func=coverage.out | tail -1
 
 # Render the coverage profile as a browsable HTML report.
