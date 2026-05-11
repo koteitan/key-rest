@@ -23,8 +23,10 @@ coverage:
 	@go tool cover -func=coverage.out | tail -1
 
 # Render the coverage profile as a browsable HTML report.
+# Post-process the generated HTML to inject a line-number gutter.
 coverage-html: coverage
 	go tool cover -html=coverage.out -o coverage.html
+	@awk 'BEGIN{ while ((getline l < "scripts/coverage-lineno.html") > 0) snip = snip l "\n"; close("scripts/coverage-lineno.html") } /<\/head>/ { sub("</head>", snip "</head>") } { print }' coverage.html > coverage.html.tmp && mv coverage.html.tmp coverage.html
 	@echo "Wrote coverage.html"
 
 coverage-clean:
