@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/koteitan/key-rest/internal/keystore"
 )
@@ -42,6 +45,21 @@ func runArgs(args ...string) (int, string, string) {
 	full := append([]string{"key-rest"}, args...)
 	code := run(full, strings.NewReader(""), &stdout, &stderr)
 	return code, stdout.String(), stderr.String()
+}
+
+// TestRunDefaultDirFails covers the keystore.DefaultDir error path in run().
+// With both KEY_REST_DIR unset and HOME empty, os.UserHomeDir fails inside
+// DefaultDir, so run prints the error and exits 1.
+func TestRunDefaultDirFails(t *testing.T) {
+	t.Setenv("KEY_REST_DIR", "")
+	t.Setenv("HOME", "")
+	code, _, errOut := runArgs("status")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d (stderr=%q)", code, errOut)
+	}
+	if !strings.Contains(errOut, "failed to get data directory") {
+		t.Fatalf("expected default-dir error, got %q", errOut)
+	}
 }
 
 func TestRunNoArgs(t *testing.T) {
@@ -419,6 +437,87 @@ func TestRunStartForegroundDecryptFails(t *testing.T) {
 	}
 	if errOut == "" {
 		t.Fatal("expected stderr output describing daemon start failure")
+	}
+}
+
+// TestRunStartForegroundSuccess covers cmdStart's foreground-success branch
+// (return 0 after d.Start completes). The daemon traps SIGTERM and exits;
+// the test also traps the signal so the test runner is not killed.
+func TestRunStartForegroundSuccess(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "p")
+	t.Setenv("KEY_REST_FOREGROUND", "1")
+
+	// Pre-encrypt a key so daemon.Start's DecryptAll succeeds.
+	store, err := keystore.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Add("u/k", "https://e.com/", false, false, nil,
+		[]byte("v"), []byte("p")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Trap SIGTERM in this test process so the runner isn't killed.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	done := make(chan int, 1)
+	go func() {
+		done <- run([]string{"key-rest", "start"},
+			strings.NewReader(""), io.Discard, io.Discard)
+	}()
+
+	// Wait for the daemon to have written its pid file (meaning Start has
+	// installed its own signal handler).
+	pidPath := filepath.Join(dir, "key-rest.pid")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(pidPath); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+		t.Fatalf("kill: %v", err)
+	}
+
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Fatalf("expected exit 0, got %d", code)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("run did not return within 3s")
+	}
+}
+
+// TestRunStopSuccess covers cmdStop's return-0 path. A pid file pointing at
+// our own pid makes IsRunning return true; daemon.Stop then sends SIGTERM
+// to ourselves, which the test traps so the runner is not killed.
+func TestRunStopSuccess(t *testing.T) {
+	dir := withTempDir(t)
+	pidPath := filepath.Join(dir, "key-rest.pid")
+	if err := os.WriteFile(pidPath, []byte(itoaPid()), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	code, _, errOut := runArgs("stop")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr=%q)", code, errOut)
+	}
+
+	select {
+	case <-sigCh:
+		// expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("SIGTERM not received after cmdStop")
 	}
 }
 

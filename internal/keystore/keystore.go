@@ -112,7 +112,7 @@ func (s *Store) load() (*keysFile, error) {
 func (s *Store) save(kf *keysFile) error {
 	data, err := json.MarshalIndent(kf, "", "  ")
 	if err != nil {
-		return err
+		return err // cover:ignore — keysFile has only marshalable types
 	}
 	return os.WriteFile(s.filePath(), data, 0600)
 }
@@ -129,7 +129,7 @@ func (s *Store) Add(uri, urlPrefix string, allowURL, allowBody bool, allowOnly *
 
 	encrypted, err := crypto.Encrypt(value, passphrase)
 	if err != nil {
-		return err
+		return err // cover:ignore — crypto.Encrypt's failure modes are themselves cover:ignore'd
 	}
 
 	entry := KeyEntry{

@@ -56,7 +56,7 @@ func (d *Daemon) IsRunning() (bool, int) {
 	// Check if process exists
 	proc, err := os.FindProcess(pid)
 	if err != nil {
-		return false, 0
+		return false, 0 // cover:ignore — os.FindProcess never errors on Unix
 	}
 
 	// Signal 0 checks if process exists without actually sending a signal
@@ -79,12 +79,12 @@ func (d *Daemon) Start(passphrase []byte) error {
 
 	// Disable core dumps to prevent credential leakage
 	if err := syscall.Setrlimit(syscall.RLIMIT_CORE, &syscall.Rlimit{Cur: 0, Max: 0}); err != nil {
-		return fmt.Errorf("failed to disable core dumps: %w", err)
+		return fmt.Errorf("failed to disable core dumps: %w", err) // cover:ignore — Setrlimit failure, untestable
 	}
 
 	// Prevent /proc/PID/mem, /proc/PID/maps, /proc/PID/environ access by non-root
 	if _, _, errno := syscall.Syscall(syscall.SYS_PRCTL, 4 /* PR_SET_DUMPABLE */, 0, 0); errno != 0 {
-		return fmt.Errorf("failed to set PR_SET_DUMPABLE: %w", errno)
+		return fmt.Errorf("failed to set PR_SET_DUMPABLE: %w", errno) // cover:ignore — PRCTL failure, untestable
 	}
 
 	// Decrypt all keys
@@ -139,11 +139,11 @@ func (d *Daemon) Stop() error {
 
 	proc, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to find process %d: %w", pid, err)
+		return fmt.Errorf("failed to find process %d: %w", pid, err) // cover:ignore — os.FindProcess never errors on Unix
 	}
 
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send SIGTERM to PID %d: %w", pid, err)
+		return fmt.Errorf("failed to send SIGTERM to PID %d: %w", pid, err) // cover:ignore — race: process dies between IsRunning and SIGTERM
 	}
 
 	fmt.Printf("sent stop signal to daemon (PID %d)\n", pid)

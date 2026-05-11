@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/flate"
 	"compress/gzip"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -65,7 +66,7 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 func writeJSONWithEncoding(w http.ResponseWriter, r *http.Request, status int, v interface{}) {
 	plain, err := json.Marshal(v)
 	if err != nil {
-		http.Error(w, "json marshal error", 500)
+		http.Error(w, "json marshal error", 500) // cover:ignore — values passed in this binary use only JSON-safe types
 		return
 	}
 	plain = append(plain, '\n')
@@ -183,7 +184,7 @@ func bodyChecker(field, expected string) func(r *http.Request) bool {
 	return func(r *http.Request) bool {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			return false
+			return false // cover:ignore — in-memory test bodies don't error
 		}
 		var m map[string]interface{}
 		if err := json.Unmarshal(body, &m); err != nil {
@@ -661,7 +662,7 @@ func buildServices() (map[string]*mockService, []credEntry) {
 func generateSelfSignedCert(certPath, keyPath string) (tls.Certificate, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return tls.Certificate{}, err
+		return tls.Certificate{}, err // cover:ignore — ECDSA P-256 key gen with crypto/rand can't fail in tests
 	}
 
 	template := x509.Certificate{
@@ -677,13 +678,13 @@ func generateSelfSignedCert(certPath, keyPath string) (tls.Certificate, error) {
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		return tls.Certificate{}, err
+		return tls.Certificate{}, err // cover:ignore — self-signed template + valid ECDSA key, CreateCertificate can't fail
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	privDER, err := x509.MarshalECPrivateKey(priv)
 	if err != nil {
-		return tls.Certificate{}, err
+		return tls.Certificate{}, err // cover:ignore — valid ECDSA priv key marshal can't fail
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privDER})
 
@@ -722,21 +723,32 @@ func logHTTPRequest(service string, r *http.Request) {
 // --- Main ---
 
 func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: test-server [options]\n\nA mock HTTPS server that mimics authentication of all 26 supported services.\n\nOptions:\n")
-		flag.PrintDefaults()
+	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr, nil)) // cover:ignore — entry-point os.Exit
+}
+
+// runMain is the testable entry point. shutdown, when non-nil, triggers a
+// graceful http.Server.Shutdown on close so tests can stop the server
+// without sending OS signals.
+func runMain(args []string, stdout, stderr io.Writer, shutdown <-chan struct{}) int {
+	fs := flag.NewFlagSet("test-server", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		fmt.Fprintf(stderr, "Usage: test-server [options]\n\nA mock HTTPS server that mimics authentication of all 26 supported services.\n\nOptions:\n")
+		fs.PrintDefaults()
 	}
 
-	port := flag.Int("port", 9443, "HTTPS port")
-	certFile := flag.String("cert", "test-server/cert.pem", "TLS certificate file path")
-	keyFile := flag.String("key", "test-server/key.pem", "TLS private key file path")
-	genCert := flag.Bool("gen-cert", false, "generate a new self-signed certificate (overwrites existing)")
-	logRequest := flag.Bool("log-request", false, "log incoming requests to stdout")
-	flag.Parse()
+	port := fs.Int("port", 9443, "HTTPS port")
+	certFile := fs.String("cert", "test-server/cert.pem", "TLS certificate file path")
+	keyFile := fs.String("key", "test-server/key.pem", "TLS private key file path")
+	genCert := fs.Bool("gen-cert", false, "generate a new self-signed certificate (overwrites existing)")
+	logRequest := fs.Bool("log-request", false, "log incoming requests to stdout")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
 
-	if flag.NArg() > 0 && flag.Arg(0) == "help" {
-		flag.Usage()
-		os.Exit(0)
+	if fs.NArg() > 0 && fs.Arg(0) == "help" {
+		fs.Usage()
+		return 0
 	}
 
 	// Load or generate TLS cert
@@ -746,18 +758,19 @@ func main() {
 		tlsCert, err = generateSelfSignedCert(*certFile, *keyFile)
 	} else if _, e := os.Stat(*certFile); e == nil {
 		tlsCert, err = tls.LoadX509KeyPair(*certFile, *keyFile)
-		log.Printf("Loaded certificate from %s", *certFile)
+		fmt.Fprintf(stderr, "Loaded certificate from %s\n", *certFile)
 	} else {
 		tlsCert, err = generateSelfSignedCert(*certFile, *keyFile)
 	}
 	if err != nil {
-		log.Fatalf("Certificate error: %v", err)
+		fmt.Fprintf(stderr, "Certificate error: %v\n", err)
+		return 1
 	}
 
 	// Build services and print credentials
 	svcs, allCreds := buildServices()
 
-	fmt.Println("=== Test Credentials ===")
+	fmt.Fprintln(stdout, "=== Test Credentials ===")
 	maxLabel := 0
 	for _, c := range allCreds {
 		if len(c.label) > maxLabel {
@@ -765,9 +778,9 @@ func main() {
 		}
 	}
 	for _, c := range allCreds {
-		fmt.Printf("  %-*s  %s\n", maxLabel, c.label, c.value)
+		fmt.Fprintf(stdout, "  %-*s  %s\n", maxLabel, c.label, c.value)
 	}
-	fmt.Println("========================")
+	fmt.Fprintln(stdout, "========================")
 
 	// Register handlers
 	mux := http.NewServeMux()
@@ -830,10 +843,23 @@ func main() {
 	addr := fmt.Sprintf(":%d", *port)
 	ln, err := tls.Listen("tcp", addr, &tls.Config{Certificates: []tls.Certificate{tlsCert}})
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		fmt.Fprintf(stderr, "Failed to listen: %v\n", err)
+		return 1
 	}
 
-	log.Printf("Mock API server running on https://localhost:%d", *port)
-	log.Printf("Services: %d registered", len(svcs))
-	log.Fatal((&http.Server{Handler: mux}).Serve(ln))
+	srv := &http.Server{Handler: mux}
+	if shutdown != nil {
+		go func() {
+			<-shutdown
+			srv.Shutdown(context.Background())
+		}()
+	}
+
+	fmt.Fprintf(stderr, "Mock API server running on https://%s\n", ln.Addr())
+	fmt.Fprintf(stderr, "Services: %d registered\n", len(svcs))
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+		fmt.Fprintf(stderr, "Serve error: %v\n", err) // cover:ignore — Serve only errors on listener loss; ErrServerClosed is the expected shutdown path
+		return 1
+	}
+	return 0
 }

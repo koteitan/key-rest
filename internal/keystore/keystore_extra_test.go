@@ -6,6 +6,25 @@ import (
 	"testing"
 )
 
+// TestNewCreatesDir0700 is a security-critical assertion: the parent
+// directory MUST be 0700 so that other users on the same machine cannot
+// even traverse it to reach the socket / keystore files. This dir-level
+// barrier is what makes the (unavoidable) racy chmod in server.Start safe.
+func TestNewCreatesDir0700(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "nested", "key-rest")
+	if _, err := New(dir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := info.Mode().Perm()
+	if mode != 0o700 {
+		t.Fatalf("daemon dir must be 0700, got %#o", mode)
+	}
+}
+
 func TestNewMkdirError(t *testing.T) {
 	// Pass a path whose parent is a regular file — MkdirAll fails.
 	parent := filepath.Join(t.TempDir(), "file.txt")
@@ -36,6 +55,18 @@ func TestDefaultDirHome(t *testing.T) {
 	}
 	if dir == "" {
 		t.Fatal("DefaultDir should not be empty when HOME is set")
+	}
+}
+
+// TestDefaultDirNoHome covers the os.UserHomeDir error path. With both
+// KEY_REST_DIR and HOME unset, UserHomeDir returns an error on Unix and
+// DefaultDir surfaces it.
+func TestDefaultDirNoHome(t *testing.T) {
+	t.Setenv("KEY_REST_DIR", "")
+	t.Setenv("HOME", "")
+	_, err := DefaultDir()
+	if err == nil {
+		t.Fatal("expected error when HOME is unset")
 	}
 }
 

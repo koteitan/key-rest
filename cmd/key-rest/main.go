@@ -21,7 +21,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.4.3"
+const version = "1.0.0"
 
 // readPassphraseFn is the function used to read a passphrase. Tests may
 // override this to inject deterministic passphrases without needing a TTY.
@@ -38,7 +38,7 @@ var spawnDaemonFn = spawnDaemon
 var exeResolveFn = os.Executable
 
 func main() {
-	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
+	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr)) // cover:ignore — entry-point os.Exit
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -163,7 +163,7 @@ func spawnDaemon(stdout, stderr io.Writer, passphrase []byte) (int, error) {
 
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		return 0, fmt.Errorf("failed to create stdin pipe: %w", err)
+		return 0, fmt.Errorf("failed to create stdin pipe: %w", err) // cover:ignore — defensive; Stdin is nil and Start not yet called, so StdinPipe cannot fail
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -618,7 +618,7 @@ func readPasswordMlocked(fd int, stderr io.Writer) []byte {
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to set terminal raw mode: %v\n", err)
-		os.Exit(1)
+		os.Exit(1) // cover:ignore — MakeRaw fatal, can't test in-process
 	}
 	defer term.Restore(fd, oldState)
 
@@ -632,7 +632,7 @@ func readPasswordMlocked(fd int, stderr io.Writer) []byte {
 		if err != nil {
 			crypto.ZeroClearAndMunlock(buf)
 			fmt.Fprintf(stderr, "failed to read from terminal: %v\n", err)
-			os.Exit(1)
+			os.Exit(1) // cover:ignore — terminal read fatal, can't test in-process
 		}
 
 		switch oneByte[0] {
@@ -648,7 +648,7 @@ func readPasswordMlocked(fd int, stderr io.Writer) []byte {
 			crypto.ZeroClearAndMunlock(buf)
 			term.Restore(fd, oldState)
 			fmt.Fprintln(stderr)
-			os.Exit(1)
+			os.Exit(1) // cover:ignore — Ctrl-C abort, can't test in-process
 			return nil
 		case 127, 8:
 			// Backspace / Delete

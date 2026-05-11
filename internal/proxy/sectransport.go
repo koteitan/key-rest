@@ -230,7 +230,7 @@ func (t *secureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	crypto.ZeroClearAndMunlock(buf)
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("failed to write request: %w", err)
+		return nil, fmt.Errorf("failed to write request: %w", err) // cover:ignore — TLS Write failure post-Dial; injecting a test hook would weaken the dial path security
 	}
 
 	resp, err := http.ReadResponse(bufio.NewReader(conn), req)

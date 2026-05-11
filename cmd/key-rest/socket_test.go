@@ -523,6 +523,35 @@ func TestRunAddReloadErrorResponse(t *testing.T) {
 	}
 }
 
+// TestRunRemoveReloadFailureWarns covers cmdRemove's sendReload-failure
+// warning branch.
+func TestRunRemoveReloadFailureWarns(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "pp", "vv")
+	// Add a key with no daemon running so the entry exists.
+	if err := os.Remove(filepath.Join(dir, "key-rest.pid")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if code, _, errOut := runArgs("add", "u/s/k", "https://api.example.com/"); code != 0 {
+		t.Fatalf("add failed: %d %s", code, errOut)
+	}
+	// Now start a fake daemon that errors on reload.
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "reload" {
+			return map[string]any{"error": map[string]any{"code": "X", "message": "boom"}}
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("remove", "u/s/k")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(errOut, "warning: failed to notify daemon") {
+		t.Fatalf("expected reload warning, got %q", errOut)
+	}
+}
+
 func TestRunRemoveNotifiesDaemon(t *testing.T) {
 	dir := withTempDir(t)
 	withFakePassphrase(t, "pp", "vv")

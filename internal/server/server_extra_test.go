@@ -260,3 +260,73 @@ func TestServerHTTPHandled(t *testing.T) {
 		t.Fatal("expected an error response (no key registered)")
 	}
 }
+
+// TestServerAcceptLoopRetriesOnError covers the `default → continue` branch
+// in acceptLoop. By closing the listener directly (without going through
+// Stop, which would close the quit channel first), Accept starts returning
+// errors while quit is still open, forcing the loop into the continue path.
+// Stop is called afterwards to terminate the loop cleanly.
+func TestServerAcceptLoopRetriesOnError(t *testing.T) {
+	srv, _ := minimalServer(t)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Close the listener directly: Accept will return ErrClosed while
+	// quit remains open, so the select picks `default → continue`.
+	srv.listener.Close()
+
+	// Give the loop a brief window to iterate through `continue` before
+	// quit is signaled.
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop closes quit, which makes the next iteration return.
+	srv.Stop()
+}
+
+// TestServerHandleConnectionExitsOnQuit covers the
+// `case <-s.quit: return` branch inside handleConnection. A connection is
+// kept open while Stop is called in a goroutine; the next request line
+// wakes the scanner, the loop top sees quit closed, and the handler
+// returns gracefully.
+func TestServerHandleConnectionExitsOnQuit(t *testing.T) {
+	srv, socketPath := minimalServer(t)
+	srv.Version = "test"
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := net.DialTimeout("unix", socketPath, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// Drive one request/response cycle so the scanner is in the loop and
+	// blocked on the next Scan.
+	conn.Write([]byte(`{"type":"version"}` + "\n"))
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 1024)
+	if _, err := conn.Read(buf); err != nil {
+		t.Fatalf("first read: %v", err)
+	}
+
+	stopDone := make(chan struct{})
+	go func() {
+		srv.Stop()
+		close(stopDone)
+	}()
+
+	// Wait briefly so Stop's close(quit) is observable before we wake the
+	// scanner.
+	time.Sleep(50 * time.Millisecond)
+	// Sending another line unblocks scanner.Scan; the loop top then sees
+	// the quit channel closed and returns (line 132).
+	conn.Write([]byte(`{"type":"version"}` + "\n"))
+
+	select {
+	case <-stopDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop did not return within 3s")
+	}
+}

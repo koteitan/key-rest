@@ -165,6 +165,16 @@ func TestParseArgsUnexpectedToken(t *testing.T) {
 	}
 }
 
+// TestParseArgsKeyRestWithoutPath covers the `loc == nil` break: the
+// HasPrefix check matches `key-rest://`, but the trailing path regex
+// requires at least one character so FindStringIndex returns nil.
+func TestParseArgsKeyRestWithoutPath(t *testing.T) {
+	args := parseArgs(`key-rest://`)
+	if len(args) != 0 {
+		t.Fatalf("expected 0 args for key-rest:// with empty path, got %v", args)
+	}
+}
+
 func TestParseArgsEmpty(t *testing.T) {
 	if len(parseArgs("")) != 0 {
 		t.Fatal("empty input should yield empty args")

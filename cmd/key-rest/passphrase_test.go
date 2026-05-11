@@ -65,6 +65,21 @@ func TestReadPassphraseGenericReaderNoNewline(t *testing.T) {
 	}
 }
 
+// TestReadPassphraseInvalidFd covers the err-break path of readPassphrase's
+// syscall.Read loop. A high, unopened fd causes syscall.Read to return
+// EBADF immediately, exercising the `if err != nil { break }` branch.
+func TestReadPassphraseInvalidFd(t *testing.T) {
+	f := os.NewFile(uintptr(1<<28), "invalid-fd")
+	if f == nil {
+		t.Skip("os.NewFile rejected the test fd")
+	}
+	defer f.Close()
+	got := readPassphrase(f, io.Discard, "prompt: ")
+	if len(got) != 0 {
+		t.Fatalf("expected empty result on EBADF, got %q", got)
+	}
+}
+
 func TestReadPassphrasePipeReader(t *testing.T) {
 	// A pipe read end is an *os.File but term.IsTerminal returns false.
 	// This exercises the syscall.Read loop path of readPassphrase.
