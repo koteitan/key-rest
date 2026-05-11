@@ -66,7 +66,7 @@ func (s *Server) Start() error {
 	// Set socket permissions to owner-only
 	if err := os.Chmod(s.socketPath, 0600); err != nil {
 		ln.Close()
-		return fmt.Errorf("failed to set socket permissions: %w", err)
+		return fmt.Errorf("failed to set socket permissions: %w", err) // cover:ignore — defense-in-depth; primary barrier is the 0700 parent dir
 	}
 
 	s.listener = ln
@@ -237,7 +237,7 @@ func (s *Server) handleList(conn net.Conn) {
 	statuses := s.ListHandler()
 	body, err := json.Marshal(statuses)
 	if err != nil {
-		s.writeResponse(conn, &proxy.Response{
+		s.writeResponse(conn, &proxy.Response{ // cover:ignore — KeyStatus is plain JSON-safe; Marshal can't fail
 			Error: &proxy.ErrorInfo{Code: "INTERNAL_ERROR", Message: err.Error()},
 		})
 		return
@@ -248,7 +248,7 @@ func (s *Server) handleList(conn net.Conn) {
 func (s *Server) writeResponse(conn net.Conn, resp *proxy.Response) {
 	data, err := json.Marshal(resp)
 	if err != nil {
-		return
+		return // cover:ignore — proxy.Response holds plain JSON-safe types
 	}
 	data = append(data, '\n')
 	conn.Write(data)

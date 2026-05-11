@@ -33,7 +33,7 @@ func DeriveKey(passphrase, salt []byte) []byte {
 func Encrypt(plaintext, passphrase []byte) ([]byte, error) {
 	salt := make([]byte, SaltSize)
 	if _, err := rand.Read(salt); err != nil {
-		return nil, err
+		return nil, err // cover:ignore — /dev/urandom failure, can't trigger in tests
 	}
 
 	key := DeriveKey(passphrase, salt)
@@ -42,17 +42,17 @@ func Encrypt(plaintext, passphrase []byte) ([]byte, error) {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, err // cover:ignore — DeriveKey always returns 32 bytes, NewCipher can't fail
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, err // cover:ignore — AES block size is always 16, NewGCM can't fail
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, err
+		return nil, err // cover:ignore — /dev/urandom failure, can't trigger in tests
 	}
 
 	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
@@ -82,12 +82,12 @@ func Decrypt(data, passphrase []byte) ([]byte, error) {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, err // cover:ignore — DeriveKey always returns 32 bytes, NewCipher can't fail
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, err // cover:ignore — AES block size is always 16, NewGCM can't fail
 	}
 
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
@@ -112,7 +112,7 @@ func Mlock(b []byte) {
 		return
 	}
 	if err := syscall.Mlock(b); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: mlock failed: %v (secrets may be swapped to disk)\n", err)
+		fmt.Fprintf(os.Stderr, "warning: mlock failed: %v (secrets may be swapped to disk)\n", err) // cover:ignore — requires globally lowering RLIMIT_MEMLOCK
 	}
 }
 

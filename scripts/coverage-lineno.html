@@ -1,0 +1,47 @@
+<style>
+  .cover-content { display: flex; align-items: stretch; }
+  pre.lineno {
+    color: rgb(80, 80, 80);
+    text-align: right;
+    padding-right: 0.8em;
+    border-right: 1px solid rgb(80, 80, 80);
+    margin: 0 0.5em 0 0;
+    user-select: none;
+    font-family: Menlo, monospace;
+    font-weight: bold;
+    white-space: pre;
+    flex: 0 0 auto;
+  }
+  .cover-content > pre.file { margin: 0; min-width: 0; }
+</style>
+<script>
+(function(){
+  function setup() {
+    document.querySelectorAll('pre.file').forEach(function(pre) {
+      var n = (pre.textContent.match(/\n/g) || []).length + 1;
+      var lineno = document.createElement('pre');
+      lineno.className = 'lineno';
+      var nums = [];
+      for (var i = 1; i <= n; i++) nums.push(i);
+      lineno.textContent = nums.join('\n');
+
+      var wrap = document.createElement('div');
+      wrap.className = 'cover-content';
+      var hidden = (pre.style.display === 'none');
+      wrap.style.display = hidden ? 'none' : 'flex';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(lineno);
+      wrap.appendChild(pre);
+
+      new MutationObserver(function() {
+        wrap.style.display = (pre.style.display === 'none') ? 'none' : 'flex';
+      }).observe(pre, { attributes: true, attributeFilter: ['style'] });
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+})();
+</script>

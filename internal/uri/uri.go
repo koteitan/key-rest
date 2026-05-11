@@ -121,7 +121,7 @@ func parseArgs(s string) []Arg {
 	for len(s) > 0 {
 		s = strings.TrimSpace(s)
 		if s == "" {
-			break
+			break // cover:ignore — bottom-of-loop trim plus the initial guard at line 117 prevent reaching the top with all-whitespace s
 		}
 
 		if s[0] == '"' {

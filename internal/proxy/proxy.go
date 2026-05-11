@@ -646,7 +646,7 @@ func decompressBody(body []byte, encoding string) ([]byte, error) {
 	case "zstd":
 		r, err := zstd.NewReader(bytes.NewReader(body))
 		if err != nil {
-			return nil, err
+			return nil, err // cover:ignore — zstd.NewReader without options can't fail
 		}
 		defer r.Close()
 		return io.ReadAll(r)

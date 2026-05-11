@@ -91,3 +91,9 @@ Traces the complete memory lifecycle of decrypted API keys, from decryption thro
 Structured security audit applying the SPECA framework methodology (subgraphs, formal properties, proof-attempt) to key-rest. Records 9 functional units, 30 properties, and 3 confirmed findings with their fixes.
 
 - [SPECA-style audit](audit-speca.md)
+
+### Test layout
+
+How key-rest's tests are organised: per-package unit tests, multi-language system tests, and security PoC / regression tests.
+
+- [Test layout](testing.md)

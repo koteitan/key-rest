@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -20,54 +21,74 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.4.0"
+const version = "1.0.0"
+
+// readPassphraseFn is the function used to read a passphrase. Tests may
+// override this to inject deterministic passphrases without needing a TTY.
+var readPassphraseFn = readPassphrase
+
+// spawnDaemonFn forks a background daemon process by re-executing this binary
+// with KEY_REST_FOREGROUND=1 and writing the passphrase to its stdin. Tests
+// may override this to avoid spawning a real subprocess.
+var spawnDaemonFn = spawnDaemon
+
+// exeResolveFn returns the executable path to re-exec for the daemon. Tests
+// may override this so spawnDaemon launches a harmless short-lived program
+// rather than re-running the test binary.
+var exeResolveFn = os.Executable
 
 func main() {
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
+	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr)) // cover:ignore — entry-point os.Exit
+}
+
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) < 2 {
+		printUsage(stderr)
+		return 1
 	}
 
 	dir, err := keystore.DefaultDir()
 	if err != nil {
-		fatalf("failed to get data directory: %v\n", err)
+		fmt.Fprintf(stderr, "failed to get data directory: %v\n", err)
+		return 1
 	}
 
 	store, err := keystore.New(dir)
 	if err != nil {
-		fatalf("failed to initialize keystore: %v\n", err)
+		fmt.Fprintf(stderr, "failed to initialize keystore: %v\n", err)
+		return 1
 	}
 
-	switch os.Args[1] {
+	switch args[1] {
 	case "version":
-		fmt.Println("key-rest " + version)
-		return
+		fmt.Fprintln(stdout, "key-rest "+version)
+		return 0
 	case "start":
-		cmdStart(dir, store)
+		return cmdStart(dir, store, stdin, stdout, stderr)
 	case "stop":
-		cmdStop(dir, store)
+		return cmdStop(dir, store, stderr)
 	case "status":
-		cmdStatus(dir, store)
+		return cmdStatus(dir, store, stdout, stderr)
 	case "add":
-		cmdAdd(store, dir)
+		return cmdAdd(args, store, dir, stdin, stdout, stderr)
 	case "remove":
-		cmdRemove(store, dir)
+		return cmdRemove(args, store, dir, stdout, stderr)
 	case "enable":
-		cmdEnable(dir)
+		return cmdEnable(args, dir, stdout, stderr)
 	case "disable":
-		cmdDisable(dir)
+		return cmdDisable(args, dir, stdout, stderr)
 	case "list":
-		cmdList(store, dir)
+		return cmdList(store, dir, stdout, stderr)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
-		printUsage()
-		os.Exit(1)
+		fmt.Fprintf(stderr, "unknown command: %s\n", args[1])
+		printUsage(stderr)
+		return 1
 	}
 }
 
-func printUsage() {
-	fmt.Fprintf(os.Stderr, "key-rest %s\n\n", version)
-	fmt.Fprintf(os.Stderr, `Usage: key-rest <command> [arguments]
+func printUsage(w io.Writer) {
+	fmt.Fprintf(w, "key-rest %s\n\n", version)
+	fmt.Fprintf(w, `Usage: key-rest <command> [arguments]
 
 Commands:
   version                        Show version
@@ -92,14 +113,15 @@ If no flags are specified, replacement is allowed everywhere.
 `)
 }
 
-func cmdStart(dir string, store *keystore.Store) {
+func cmdStart(dir string, store *keystore.Store, stdin io.Reader, stdout, stderr io.Writer) int {
 	d := daemon.New(dir, store)
 	d.Version = version
 	if running, pid := d.IsRunning(); running {
-		fatalf("daemon is already running (PID %d)\n", pid)
+		fmt.Fprintf(stderr, "daemon is already running (PID %d)\n", pid)
+		return 1
 	}
 
-	passphrase := readPassphrase("Enter passphrase: ")
+	passphrase := readPassphraseFn(stdin, stderr, "Enter passphrase: ")
 	crypto.Mlock(passphrase)
 	defer crypto.ZeroClearAndMunlock(passphrase)
 
@@ -107,61 +129,77 @@ func cmdStart(dir string, store *keystore.Store) {
 	if os.Getenv("KEY_REST_FOREGROUND") == "1" {
 		// Running in foreground mode (used after fork)
 		if err := d.Start(passphrase); err != nil {
-			fatalf("%v\n", err)
+			fmt.Fprintf(stderr, "%v\n", err)
+			return 1
 		}
-		return
+		return 0
 	}
 
-	// Fork a background process
-	exe, err := os.Executable()
+	pid, err := spawnDaemonFn(stdout, stderr, passphrase)
 	if err != nil {
-		fatalf("failed to get executable path: %v\n", err)
+		fmt.Fprintf(stderr, "%v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "daemon starting in background (PID %d)\n", pid)
+	return 0
+}
+
+// spawnDaemon launches a background daemon by re-executing the current binary
+// with KEY_REST_FOREGROUND=1, then pipes the passphrase to its stdin and
+// returns the child PID.
+func spawnDaemon(stdout, stderr io.Writer, passphrase []byte) (int, error) {
+	exe, err := exeResolveFn()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	cmd := exec.Command(exe, "start")
 	cmd.Env = append(os.Environ(), "KEY_REST_FOREGROUND=1")
 	cmd.Stdin = nil
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
-	// Pass passphrase via pipe
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		fatalf("failed to create stdin pipe: %v\n", err)
+		return 0, fmt.Errorf("failed to create stdin pipe: %w", err) // cover:ignore — defensive; Stdin is nil and Start not yet called, so StdinPipe cannot fail
 	}
 
 	if err := cmd.Start(); err != nil {
-		fatalf("failed to start daemon: %v\n", err)
+		return 0, fmt.Errorf("failed to start daemon: %w", err)
 	}
 
 	stdinPipe.Write(passphrase)
 	stdinPipe.Write([]byte("\n"))
 	stdinPipe.Close()
 
-	fmt.Printf("daemon starting in background (PID %d)\n", cmd.Process.Pid)
+	return cmd.Process.Pid, nil
 }
 
-func cmdStop(dir string, store *keystore.Store) {
+func cmdStop(dir string, store *keystore.Store, stderr io.Writer) int {
 	d := daemon.New(dir, store)
 	if err := d.Stop(); err != nil {
-		fatalf("%v\n", err)
+		fmt.Fprintf(stderr, "%v\n", err)
+		return 1
 	}
+	return 0
 }
 
-func cmdStatus(dir string, store *keystore.Store) {
+func cmdStatus(dir string, store *keystore.Store, stdout, stderr io.Writer) int {
 	d := daemon.New(dir, store)
 	running, pid := d.IsRunning()
 	if running {
-		fmt.Printf("running (PID %d)\n", pid)
-		checkDaemonVersion(dir)
+		fmt.Fprintf(stdout, "running (PID %d)\n", pid)
+		checkDaemonVersion(dir, stderr)
 	} else {
-		fmt.Println("stopped")
+		fmt.Fprintln(stdout, "stopped")
 	}
+	return 0
 }
 
-func cmdAdd(store *keystore.Store, dir string) {
-	args := os.Args[2:]
+func cmdAdd(allArgs []string, store *keystore.Store, dir string, stdin io.Reader, stdout, stderr io.Writer) int {
+	args := allArgs[2:]
 	var allowOnlyHeaders []string
 	var allowOnlyQueries []string
 	var allowOnlyFields []string
@@ -181,21 +219,24 @@ func cmdAdd(store *keystore.Store, dir string) {
 		case "--allow-only-header":
 			i++
 			if i >= len(args) {
-				fatalf("--allow-only-header requires a header name\n")
+				fmt.Fprintf(stderr, "--allow-only-header requires a header name\n")
+				return 1
 			}
 			allowOnlyHeaders = append(allowOnlyHeaders, args[i])
 			hasAllowOnly = true
 		case "--allow-only-query":
 			i++
 			if i >= len(args) {
-				fatalf("--allow-only-query requires a parameter name\n")
+				fmt.Fprintf(stderr, "--allow-only-query requires a parameter name\n")
+				return 1
 			}
 			allowOnlyQueries = append(allowOnlyQueries, args[i])
 			hasAllowOnly = true
 		case "--allow-only-field":
 			i++
 			if i >= len(args) {
-				fatalf("--allow-only-field requires a field name\n")
+				fmt.Fprintf(stderr, "--allow-only-field requires a field name\n")
+				return 1
 			}
 			allowOnlyFields = append(allowOnlyFields, args[i])
 			hasAllowOnly = true
@@ -205,8 +246,8 @@ func cmdAdd(store *keystore.Store, dir string) {
 	}
 
 	if len(positional) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: key-rest add [options] <key-uri> <url-prefix>\n")
-		os.Exit(1)
+		fmt.Fprintf(stderr, "Usage: key-rest add [options] <key-uri> <url-prefix>\n")
+		return 1
 	}
 
 	keyURI := positional[0]
@@ -227,60 +268,65 @@ func cmdAdd(store *keystore.Store, dir string) {
 	d := daemon.New(dir, store)
 	running, _ := d.IsRunning()
 
-	passphrase := readPassphrase("Enter passphrase: ")
+	passphrase := readPassphraseFn(stdin, stderr, "Enter passphrase: ")
 	crypto.Mlock(passphrase)
 	defer crypto.ZeroClearAndMunlock(passphrase)
 
-	value := readPassphrase("Enter the key value: ")
+	value := readPassphraseFn(stdin, stderr, "Enter the key value: ")
 	crypto.Mlock(value)
 	defer crypto.ZeroClearAndMunlock(value)
 
 	if err := store.Add(keyURI, urlPrefix, false, false, allowOnly, value, passphrase); err != nil {
-		fatalf("failed to add key: %v\n", err)
+		fmt.Fprintf(stderr, "failed to add key: %v\n", err)
+		return 1
 	}
 
-	fmt.Printf("key added: %s\n", keyURI)
+	fmt.Fprintf(stdout, "key added: %s\n", keyURI)
 
 	if running {
 		if err := sendReload(dir); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to notify daemon: %v (restart daemon to apply)\n", err)
+			fmt.Fprintf(stderr, "warning: failed to notify daemon: %v (restart daemon to apply)\n", err)
 		}
 	}
+	return 0
 }
 
-func cmdRemove(store *keystore.Store, dir string) {
-	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: key-rest remove <key-uri>\n")
-		os.Exit(1)
+func cmdRemove(allArgs []string, store *keystore.Store, dir string, stdout, stderr io.Writer) int {
+	if len(allArgs) < 3 {
+		fmt.Fprintf(stderr, "Usage: key-rest remove <key-uri>\n")
+		return 1
 	}
 
-	keyURI := os.Args[2]
+	keyURI := allArgs[2]
 	if err := store.Remove(keyURI); err != nil {
-		fatalf("failed to remove key: %v\n", err)
+		fmt.Fprintf(stderr, "failed to remove key: %v\n", err)
+		return 1
 	}
 
-	fmt.Printf("key removed: %s\n", keyURI)
+	fmt.Fprintf(stdout, "key removed: %s\n", keyURI)
 
 	d := daemon.New(dir, store)
 	if running, _ := d.IsRunning(); running {
 		if err := sendReload(dir); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to notify daemon: %v (restart daemon to apply)\n", err)
+			fmt.Fprintf(stderr, "warning: failed to notify daemon: %v (restart daemon to apply)\n", err)
 		}
 	}
+	return 0
 }
 
-func cmdList(store *keystore.Store, dir string) {
+func cmdList(store *keystore.Store, dir string, stdout, stderr io.Writer) int {
 	// If daemon is running, query it for runtime status (includes enabled/disabled)
 	d := daemon.New(dir, store)
 	if running, _ := d.IsRunning(); running {
-		checkDaemonVersion(dir)
+		checkDaemonVersion(dir, stderr)
 		statuses, err := sendList(dir)
 		if err != nil {
-			fatalf("failed to query daemon: %v\n", err)
+			fmt.Fprintf(stderr, "failed to query daemon: %v\n", err)
+			return 1
 		}
 		if len(statuses) == 0 {
-			fmt.Println("no keys registered")
-			return
+			fmt.Fprintln(stdout, "no keys registered")
+			return 0
 		}
 		sort.Slice(statuses, func(i, j int) bool {
 			return statuses[i].URI < statuses[j].URI
@@ -290,26 +336,28 @@ func cmdList(store *keystore.Store, dir string) {
 			if s.Disabled {
 				status = "disabled"
 			}
-			fmt.Printf("key-rest://%s: %s %s%s\n", s.URI, s.URLPrefix, status, formatPlacement(s.AllowOnly, s.AllowURL, s.AllowBody))
+			fmt.Fprintf(stdout, "key-rest://%s: %s %s%s\n", s.URI, s.URLPrefix, status, formatPlacement(s.AllowOnly, s.AllowURL, s.AllowBody))
 		}
-		return
+		return 0
 	}
 
 	// Daemon not running: read from file
 	entries, err := store.List()
 	if err != nil {
-		fatalf("failed to list keys: %v\n", err)
+		fmt.Fprintf(stderr, "failed to list keys: %v\n", err)
+		return 1
 	}
 	if len(entries) == 0 {
-		fmt.Println("no keys registered")
-		return
+		fmt.Fprintln(stdout, "no keys registered")
+		return 0
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].URI < entries[j].URI
 	})
 	for _, e := range entries {
-		fmt.Printf("key-rest://%s: %s%s\n", e.URI, e.URLPrefix, formatPlacement(e.AllowOnly, e.AllowURL, e.AllowBody))
+		fmt.Fprintf(stdout, "key-rest://%s: %s%s\n", e.URI, e.URLPrefix, formatPlacement(e.AllowOnly, e.AllowURL, e.AllowBody))
 	}
+	return 0
 }
 
 func formatPlacement(allowOnly *keystore.Placement, allowURL, allowBody bool) string {
@@ -341,33 +389,39 @@ func formatPlacement(allowOnly *keystore.Placement, allowURL, allowBody bool) st
 	return flags
 }
 
-func cmdEnable(dir string) {
-	if len(os.Args) < 3 {
-		fatalf("Usage: key-rest enable <key-uri-prefix>\n")
+func cmdEnable(allArgs []string, dir string, stdout, stderr io.Writer) int {
+	if len(allArgs) < 3 {
+		fmt.Fprintf(stderr, "Usage: key-rest enable <key-uri-prefix>\n")
+		return 1
 	}
-	checkDaemonVersion(dir)
-	uriPrefix := os.Args[2]
+	checkDaemonVersion(dir, stderr)
+	uriPrefix := allArgs[2]
 	count, err := sendEnableDisable(dir, "enable", uriPrefix)
 	if err != nil {
-		fatalf("failed to enable: %v\n", err)
+		fmt.Fprintf(stderr, "failed to enable: %v\n", err)
+		return 1
 	}
-	fmt.Printf("%d key(s) enabled\n", count)
+	fmt.Fprintf(stdout, "%d key(s) enabled\n", count)
+	return 0
 }
 
-func cmdDisable(dir string) {
-	if len(os.Args) < 3 {
-		fatalf("Usage: key-rest disable <key-uri-prefix>\n")
+func cmdDisable(allArgs []string, dir string, stdout, stderr io.Writer) int {
+	if len(allArgs) < 3 {
+		fmt.Fprintf(stderr, "Usage: key-rest disable <key-uri-prefix>\n")
+		return 1
 	}
-	checkDaemonVersion(dir)
-	uriPrefix := os.Args[2]
+	checkDaemonVersion(dir, stderr)
+	uriPrefix := allArgs[2]
 	count, err := sendEnableDisable(dir, "disable", uriPrefix)
 	if err != nil {
-		fatalf("failed to disable: %v\n", err)
+		fmt.Fprintf(stderr, "failed to disable: %v\n", err)
+		return 1
 	}
-	fmt.Printf("%d key(s) disabled\n", count)
+	fmt.Fprintf(stdout, "%d key(s) disabled\n", count)
+	return 0
 }
 
-func checkDaemonVersion(dir string) {
+func checkDaemonVersion(dir string, stderr io.Writer) {
 	socketPath := filepath.Join(dir, "key-rest.sock")
 	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
 	if err != nil {
@@ -393,7 +447,7 @@ func checkDaemonVersion(dir string) {
 		return
 	}
 	if resp.Body != "" && resp.Body != version {
-		fmt.Fprintf(os.Stderr, "warning: daemon version %s does not match CLI version %s (restart daemon to update)\n", resp.Body, version)
+		fmt.Fprintf(stderr, "warning: daemon version %s does not match CLI version %s (restart daemon to update)\n", resp.Body, version)
 	}
 }
 
@@ -417,7 +471,7 @@ func sendEnableDisable(dir, action, uriPrefix string) (int, error) {
 	}
 
 	var resp struct {
-		Status int `json:"status"`
+		Status int    `json:"status"`
 		Body   string `json:"body"`
 		Error  *struct {
 			Code    string `json:"code"`
@@ -509,11 +563,21 @@ func sendReload(dir string) error {
 	return nil
 }
 
-func readPassphrase(prompt string) []byte {
-	fd := int(os.Stdin.Fd())
-
-	// Non-terminal stdin: read one line (for piped input or forked process)
-	if !term.IsTerminal(fd) {
+// readPassphrase reads a passphrase from stdin. If stdin is os.Stdin and a
+// terminal, echo is disabled and the prompt is written to stderr. Otherwise
+// (piped input, test injection) one line is read from stdin.
+func readPassphrase(stdin io.Reader, stderr io.Writer, prompt string) []byte {
+	// If caller passed os.Stdin and it's a terminal, use raw mode.
+	if f, ok := stdin.(*os.File); ok && f != nil {
+		fd := int(f.Fd())
+		if term.IsTerminal(fd) {
+			fmt.Fprint(stderr, prompt)
+			pass := readPasswordMlocked(fd, stderr)
+			fmt.Fprintln(stderr)
+			return pass
+		}
+		// Non-terminal *os.File: read one line via syscall (avoids buffered reader
+		// gobbling pipe data the child process may need).
 		buf := make([]byte, 4096)
 		crypto.Mlock(buf)
 		n := 0
@@ -538,20 +602,23 @@ func readPassphrase(prompt string) []byte {
 		return result
 	}
 
-	// Terminal stdin: read with echo disabled
-	fmt.Fprint(os.Stderr, prompt)
-	pass := readPasswordMlocked(fd)
-	fmt.Fprintln(os.Stderr)
-	return pass
+	// Generic io.Reader (test injection): read one line.
+	br := bufio.NewReader(stdin)
+	line, _ := br.ReadString('\n')
+	if len(line) > 0 && line[len(line)-1] == '\n' {
+		line = line[:len(line)-1]
+	}
+	return []byte(line)
 }
 
 // readPasswordMlocked reads a password from a terminal with echo disabled.
 // All buffers are mlocked from allocation. The returned slice is mlocked;
 // the caller is responsible for ZeroClearAndMunlock.
-func readPasswordMlocked(fd int) []byte {
+func readPasswordMlocked(fd int, stderr io.Writer) []byte {
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
-		fatalf("failed to set terminal raw mode: %v\n", err)
+		fmt.Fprintf(stderr, "failed to set terminal raw mode: %v\n", err)
+		os.Exit(1) // cover:ignore — MakeRaw fatal, can't test in-process
 	}
 	defer term.Restore(fd, oldState)
 
@@ -564,7 +631,8 @@ func readPasswordMlocked(fd int) []byte {
 		_, err := syscall.Read(fd, oneByte[:])
 		if err != nil {
 			crypto.ZeroClearAndMunlock(buf)
-			fatalf("failed to read from terminal: %v\n", err)
+			fmt.Fprintf(stderr, "failed to read from terminal: %v\n", err)
+			os.Exit(1) // cover:ignore — terminal read fatal, can't test in-process
 		}
 
 		switch oneByte[0] {
@@ -579,8 +647,8 @@ func readPasswordMlocked(fd int) []byte {
 			// Ctrl-C: abort
 			crypto.ZeroClearAndMunlock(buf)
 			term.Restore(fd, oldState)
-			fmt.Fprintln(os.Stderr)
-			os.Exit(1)
+			fmt.Fprintln(stderr)
+			os.Exit(1) // cover:ignore — Ctrl-C abort, can't test in-process
 			return nil
 		case 127, 8:
 			// Backspace / Delete
@@ -595,9 +663,4 @@ func readPasswordMlocked(fd int) []byte {
 			}
 		}
 	}
-}
-
-func fatalf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format, args...)
-	os.Exit(1)
 }
