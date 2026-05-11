@@ -116,6 +116,47 @@ func TestRunListEmpty(t *testing.T) {
 	}
 }
 
+func TestRunListStoreListFails(t *testing.T) {
+	dir := withTempDir(t)
+	// Corrupt keys.enc so store.List's load() returns a JSON-parse error.
+	if err := os.WriteFile(filepath.Join(dir, "keys.enc"), []byte("not-json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errOut := runArgs("list")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "failed to list keys") {
+		t.Fatalf("expected 'failed to list keys' in stderr, got %q", errOut)
+	}
+}
+
+func TestRunListSortsEntries(t *testing.T) {
+	withTempDir(t)
+	withFakePassphrase(t, "pp", "v1", "pp", "v2", "pp", "v3")
+	// Add three keys in non-alphabetical order.
+	for _, uri := range []string{"u/s/c", "u/s/a", "u/s/b"} {
+		if code, _, errOut := runArgs("add", uri, "https://api.example.com/"); code != 0 {
+			t.Fatalf("add %s failed: %d %s", uri, code, errOut)
+		}
+	}
+
+	code, out, _ := runArgs("list")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	// Output must be sorted by URI.
+	idxA := strings.Index(out, "key-rest://u/s/a")
+	idxB := strings.Index(out, "key-rest://u/s/b")
+	idxC := strings.Index(out, "key-rest://u/s/c")
+	if idxA < 0 || idxB < 0 || idxC < 0 {
+		t.Fatalf("missing entries in output: %q", out)
+	}
+	if !(idxA < idxB && idxB < idxC) {
+		t.Fatalf("expected a < b < c ordering, got %q", out)
+	}
+}
+
 func TestRunRemoveMissingArg(t *testing.T) {
 	withTempDir(t)
 	code, _, errOut := runArgs("remove")
@@ -224,6 +265,23 @@ func TestRunAddAllowOnlyFieldRequiresValue(t *testing.T) {
 	}
 	if !strings.Contains(errOut, "--allow-only-field requires") {
 		t.Fatalf("expected flag-error, got %q", errOut)
+	}
+}
+
+func TestRunAddStoreAddFails(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "pp", "vv")
+	// Corrupt keys.enc so store.Add's internal load() fails on JSON parse.
+	if err := os.WriteFile(filepath.Join(dir, "keys.enc"), []byte("not-json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, _, errOut := runArgs("add", "u/s/k", "https://api.example.com/")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d (stderr=%q)", code, errOut)
+	}
+	if !strings.Contains(errOut, "failed to add key") {
+		t.Fatalf("expected 'failed to add key' in stderr, got %q", errOut)
 	}
 }
 

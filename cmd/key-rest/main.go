@@ -21,7 +21,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.4.1"
+const version = "0.4.2"
 
 // readPassphraseFn is the function used to read a passphrase. Tests may
 // override this to inject deterministic passphrases without needing a TTY.
@@ -31,6 +31,11 @@ var readPassphraseFn = readPassphrase
 // with KEY_REST_FOREGROUND=1 and writing the passphrase to its stdin. Tests
 // may override this to avoid spawning a real subprocess.
 var spawnDaemonFn = spawnDaemon
+
+// exeResolveFn returns the executable path to re-exec for the daemon. Tests
+// may override this so spawnDaemon launches a harmless short-lived program
+// rather than re-running the test binary.
+var exeResolveFn = os.Executable
 
 func main() {
 	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
@@ -144,7 +149,7 @@ func cmdStart(dir string, store *keystore.Store, stdin io.Reader, stdout, stderr
 // with KEY_REST_FOREGROUND=1, then pipes the passphrase to its stdin and
 // returns the child PID.
 func spawnDaemon(stdout, stderr io.Writer, passphrase []byte) (int, error) {
-	exe, err := os.Executable()
+	exe, err := exeResolveFn()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get executable path: %w", err)
 	}

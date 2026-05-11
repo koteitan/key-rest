@@ -55,6 +55,15 @@ func (f *fakeDaemon) serve() {
 	}
 }
 
+// rawBytes lets a fakeDaemon handler bypass JSON marshaling and write the
+// given bytes verbatim. Useful to exercise client-side scanner.Scan /
+// json.Unmarshal failure paths.
+type rawBytes []byte
+
+// closeNow signals the fakeDaemon to close the connection without sending
+// any response (covers scanner.Scan returning false).
+type closeNow struct{}
+
 func (f *fakeDaemon) handle(conn net.Conn) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
@@ -68,12 +77,32 @@ func (f *fakeDaemon) handle(conn net.Conn) {
 		h := f.handler
 		f.mu.Unlock()
 		resp := h(req)
-		data, _ := json.Marshal(resp)
-		data = append(data, '\n')
-		if _, err := conn.Write(data); err != nil {
+		switch v := resp.(type) {
+		case closeNow:
 			return
+		case rawBytes:
+			conn.Write([]byte(v))
+			return
+		default:
+			data, _ := json.Marshal(resp)
+			data = append(data, '\n')
+			if _, err := conn.Write(data); err != nil {
+				return
+			}
 		}
 	}
+}
+
+// plantPidOnly writes a pid file pointing at our own process so IsRunning
+// reports true, but does NOT start a socket server. cmdList/cmdEnable/etc
+// then try to dial the missing socket and fail.
+func plantPidOnly(t *testing.T, dir string) {
+	t.Helper()
+	pidPath := filepath.Join(dir, "key-rest.pid")
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(pidPath) })
 }
 
 func (f *fakeDaemon) stop() {
@@ -263,6 +292,234 @@ func TestRunAddNotifiesDaemon(t *testing.T) {
 	}
 	if !gotReload {
 		t.Fatal("expected daemon to receive reload request")
+	}
+}
+
+// --- net.DialTimeout failures (pid file present, no socket) ---
+
+func TestRunListDialFails(t *testing.T) {
+	dir := withTempDir(t)
+	plantPidOnly(t, dir)
+
+	code, _, errOut := runArgs("list")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "failed to query daemon") {
+		t.Fatalf("expected dial-fail surface, got %q", errOut)
+	}
+}
+
+func TestRunAddSendReloadDialFails(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "pp", "vv")
+	plantPidOnly(t, dir)
+
+	code, out, errOut := runArgs("add", "u/s/k", "https://api.example.com/")
+	if code != 0 {
+		t.Fatalf("expected exit 0 (add succeeds, reload fails as warning), got %d", code)
+	}
+	if !strings.Contains(out, "key added") {
+		t.Fatalf("expected key-added, got %q", out)
+	}
+	if !strings.Contains(errOut, "warning: failed to notify daemon") {
+		t.Fatalf("expected reload warning, got %q", errOut)
+	}
+}
+
+// --- scanner.Scan failure (daemon closes connection without writing) ---
+
+func TestRunEnableNoResponse(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "enable" {
+			return closeNow{}
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("enable", "u/")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "no response from daemon") {
+		t.Fatalf("expected no-response error, got %q", errOut)
+	}
+}
+
+func TestRunListNoResponse(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "list" {
+			return closeNow{}
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("list")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "no response from daemon") {
+		t.Fatalf("expected no-response error, got %q", errOut)
+	}
+}
+
+// --- malformed JSON in wrapper ---
+
+func TestRunEnableMalformedJSON(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "enable" {
+			return rawBytes("{not-json\n")
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("enable", "u/")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "failed to enable") {
+		t.Fatalf("expected failed-to-enable, got %q", errOut)
+	}
+}
+
+func TestRunListMalformedJSON(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "list" {
+			return rawBytes("{not-json\n")
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("list")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "failed to query daemon") {
+		t.Fatalf("expected query-fail surface, got %q", errOut)
+	}
+}
+
+// --- sendList: wrapper valid, body is not a JSON array ---
+
+func TestRunListMalformedBody(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "list" {
+			return map[string]any{"body": "this-is-not-an-array"}
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("list")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(errOut, "failed to query daemon") {
+		t.Fatalf("expected query-fail surface, got %q", errOut)
+	}
+}
+
+// --- checkDaemonVersion: scanner.Scan / Unmarshal failures (silent) ---
+
+func TestRunStatusVersionNoResponse(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "version" {
+			return closeNow{}
+		}
+		return map[string]any{"body": ""}
+	})
+
+	code, out, _ := runArgs("status")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "running") {
+		t.Fatalf("expected 'running', got %q", out)
+	}
+}
+
+func TestRunStatusVersionMalformedJSON(t *testing.T) {
+	dir := withTempDir(t)
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "version" {
+			return rawBytes("{not-json\n")
+		}
+		return map[string]any{"body": ""}
+	})
+
+	code, out, _ := runArgs("status")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(out, "running") {
+		t.Fatalf("expected 'running', got %q", out)
+	}
+}
+
+// --- sendReload error paths (triggered via cmdAdd's reload notification) ---
+
+func TestRunAddReloadNoResponse(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "pp", "vv")
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "reload" {
+			return closeNow{}
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("add", "u/s/k", "https://api.example.com/")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(errOut, "warning: failed to notify daemon") {
+		t.Fatalf("expected reload warning, got %q", errOut)
+	}
+	if !strings.Contains(errOut, "no response from daemon") {
+		t.Fatalf("expected no-response surface in warning, got %q", errOut)
+	}
+}
+
+func TestRunAddReloadMalformedJSON(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "pp", "vv")
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "reload" {
+			return rawBytes("{not-json\n")
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("add", "u/s/k", "https://api.example.com/")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(errOut, "warning: failed to notify daemon") {
+		t.Fatalf("expected reload warning, got %q", errOut)
+	}
+}
+
+func TestRunAddReloadErrorResponse(t *testing.T) {
+	dir := withTempDir(t)
+	withFakePassphrase(t, "pp", "vv")
+	startFakeDaemon(t, dir, func(req map[string]any) any {
+		if req["type"] == "reload" {
+			return map[string]any{"error": map[string]any{"code": "X", "message": "no-can-do"}}
+		}
+		return map[string]any{"body": version}
+	})
+
+	code, _, errOut := runArgs("add", "u/s/k", "https://api.example.com/")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	if !strings.Contains(errOut, "no-can-do") {
+		t.Fatalf("expected daemon error in warning, got %q", errOut)
 	}
 }
 
