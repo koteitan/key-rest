@@ -21,11 +21,16 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "0.4.0"
+const version = "0.4.1"
 
 // readPassphraseFn is the function used to read a passphrase. Tests may
 // override this to inject deterministic passphrases without needing a TTY.
 var readPassphraseFn = readPassphrase
+
+// spawnDaemonFn forks a background daemon process by re-executing this binary
+// with KEY_REST_FOREGROUND=1 and writing the passphrase to its stdin. Tests
+// may override this to avoid spawning a real subprocess.
+var spawnDaemonFn = spawnDaemon
 
 func main() {
 	os.Exit(run(os.Args, os.Stdin, os.Stdout, os.Stderr))
@@ -125,11 +130,23 @@ func cmdStart(dir string, store *keystore.Store, stdin io.Reader, stdout, stderr
 		return 0
 	}
 
-	// Fork a background process
+	pid, err := spawnDaemonFn(stdout, stderr, passphrase)
+	if err != nil {
+		fmt.Fprintf(stderr, "%v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(stdout, "daemon starting in background (PID %d)\n", pid)
+	return 0
+}
+
+// spawnDaemon launches a background daemon by re-executing the current binary
+// with KEY_REST_FOREGROUND=1, then pipes the passphrase to its stdin and
+// returns the child PID.
+func spawnDaemon(stdout, stderr io.Writer, passphrase []byte) (int, error) {
 	exe, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(stderr, "failed to get executable path: %v\n", err)
-		return 1
+		return 0, fmt.Errorf("failed to get executable path: %w", err)
 	}
 
 	cmd := exec.Command(exe, "start")
@@ -139,24 +156,20 @@ func cmdStart(dir string, store *keystore.Store, stdin io.Reader, stdout, stderr
 	cmd.Stderr = stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
-	// Pass passphrase via pipe
 	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		fmt.Fprintf(stderr, "failed to create stdin pipe: %v\n", err)
-		return 1
+		return 0, fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(stderr, "failed to start daemon: %v\n", err)
-		return 1
+		return 0, fmt.Errorf("failed to start daemon: %w", err)
 	}
 
 	stdinPipe.Write(passphrase)
 	stdinPipe.Write([]byte("\n"))
 	stdinPipe.Close()
 
-	fmt.Fprintf(stdout, "daemon starting in background (PID %d)\n", cmd.Process.Pid)
-	return 0
+	return cmd.Process.Pid, nil
 }
 
 func cmdStop(dir string, store *keystore.Store, stderr io.Writer) int {
