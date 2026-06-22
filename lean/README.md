@@ -43,6 +43,36 @@ Every theorem is proved without `sorry`/`admit`/extra axioms. Each ends with a
 `#print axioms` check; the only dependencies are `propext`, `Classical.choice`,
 `Quot.sound` (the standard Lean kernel axioms).
 
+## Part 2c — faithful decode model (now detects the bug)
+
+An earlier version of this model decoded percent-encoding with a tolerant,
+total function and omitted the implementation's "decode failed → return the
+body unmasked" branch. That gap is exactly where a real credential-leak lived,
+and the proof could not see it. The model is now faithful to the decoder's
+failure behaviour:
+
+| Definition / theorem | What it captures |
+|---|---|
+| `queryUnescape` | Go `url.QueryUnescape` modeled honestly: all-or-nothing (a single bad `%` → `none`) and `'+'`→space |
+| `pipeline_buggy` | The old code path that bails unmasked on decode failure |
+| `buggy_leaks_stray_pct` | **Proves the leak**: a stray invalid `%` in the body leaves a percent-encoded credential recoverable (`= true`) |
+| `fixed_masks_stray_pct` | The fixed `pipeline` masks the same input (`= false`) |
+| `fixed_masks_plus_b64` | v1.0.2 fix verified: always using `percentDecodeAll` keeps `'+'` as `'+'`, so the `'+'`-containing base64 form is now masked (`= false`) |
+
+Lesson: a formal proof only guarantees properties **of the model**. Bugs in the
+gap between model and implementation — here, error handling abstracted into a
+happy-path total function — are invisible until the model is made faithful to
+that path. (Ironically, the old tolerant decoder *was* the fix.)
+
+### Model fidelity — still simplified
+
+- `maskCredentials` models **one** credential; the implementation sorts **many**
+  longest-first (which is why two overlapping keys can partially mask each other).
+- `maskTruncatedKeys` (regex, OpenAI/Stripe/localhost only) is omitted; it is an
+  extra masker, so omitting it is conservative for the leak proofs.
+- Only the response **body** is modeled; the implementation runs the same
+  sequence on response **headers**, so the guarantees transfer.
+
 ## A finding surfaced by universalization
 
 `percent_roundtrip` is **not** unconditional. The Go test-server percent-encodes

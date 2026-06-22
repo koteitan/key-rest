@@ -21,7 +21,7 @@ import (
 	"github.com/koteitan/key-rest/internal/keystore"
 )
 
-const version = "1.0.1"
+const version = "1.0.2"
 
 // readPassphraseFn is the function used to read a passphrase. Tests may
 // override this to inject deterministic passphrases without needing a TTY.

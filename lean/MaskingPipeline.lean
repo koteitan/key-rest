@@ -13,6 +13,14 @@
  *     `∀`-quantified statements proved by structural induction.  These promote
  *     the point checks to general guarantees where that is sound.
  *
+ *   Part 2c — faithful decode model + bug detection:
+ *     `queryUnescape` mirrors Go's all-or-nothing url.QueryUnescape (and its
+ *     '+'→space).  `pipeline_buggy` (bail on decode failure) PROVES the v1.0.1
+ *     leak (`buggy_leaks_stray_pct`); the fixed `pipeline` masks it
+ *     (`fixed_masks_stray_pct`).  The same faithful model also surfaces a
+ *     residual '+'→space miss in the shipped fix (`fixed_misses_plus_b64`).
+ *
+
  * SCOPE (do not overstate — see lean/README.md §"What is NOT proved"):
  *   These proofs cover the MASKING LAYER only (response scanning).  key-rest's
  *   primary defence is placement validation (default-deny on where a credential
@@ -84,6 +92,30 @@ def percentDecodeAll : Str → Str
   | c :: rest => c :: percentDecodeAll rest
   | []        => []
 
+-- queryUnescape models Go's url.QueryUnescape faithfully: it is ALL-OR-NOTHING.
+-- A single '%' not followed by two hex digits makes the whole decode fail
+-- (returns none). It also turns '+' into a space. This is the partial decoder
+-- whose failure path was the source of the masking bypass; percentDecodeAll
+-- above is the tolerant decoder used as the fix's fallback.
+def queryUnescape : Str → Option Str
+  | '%' :: h :: l :: rest =>
+    match hexDigit h, hexDigit l with
+    | some hi, some lo =>
+      match queryUnescape rest with
+      | some d => some (Char.ofNat (hi * 16 + lo) :: d)
+      | none   => none
+    | _, _ => none
+  | '%' :: _ => none
+  | '+' :: rest =>
+    match queryUnescape rest with
+    | some d => some (' ' :: d)
+    | none   => none
+  | c :: rest =>
+    match queryUnescape rest with
+    | some d => some (c :: d)
+    | none   => none
+  | []        => some []
+
 -- ---------------------------------------------------------------------------
 -- JSON escaping (mirrors json.Marshal string escaping in proxy.go)
 -- ---------------------------------------------------------------------------
@@ -115,14 +147,19 @@ def maskCredentials (cred uri body : Str) : Str :=
 def maskTransformOutput (b64cred template body : Str) : Str :=
   replaceAll b64cred template body
 
--- maskPercentEncoded: URL-decodes the body, then re-applies both masking steps.
--- If masking the decoded form produced a change, the decoded+masked form is
--- returned; otherwise the original is kept.  (Models proxy.go maskPercentEncoded.)
+-- maskPercentEncoded models the FIXED proxy.go maskPercentEncoded (v1.0.2):
+--   no '%'              -> unchanged
+--   always use percentDecodeAll (tolerant, '+' kept as '+') — never
+--   queryUnescape, which converts '+' to space and caused base64 credentials
+--   containing '+' to be missed (fixed_misses_plus_b64).
 def maskPercentEncoded (cred uri b64cred template body : Str) : Str :=
-  let decoded := percentDecodeAll body
-  let masked  := maskTransformOutput b64cred template decoded
-  let masked  := maskCredentials cred uri masked
-  if masked != decoded then masked else body
+  if body.contains '%' then
+    let decoded := percentDecodeAll body
+    if decoded = body then body
+    else
+      let masked := maskCredentials cred uri (maskTransformOutput b64cred template decoded)
+      if masked = decoded then body else masked
+  else body
 
 -- pipeline: the full masking pipeline for one response string.
 -- b64cred = "" simulates "agent used raw key-rest://, no transform".
@@ -131,6 +168,27 @@ def pipeline (cred uri b64cred response : Str) : Str :=
   let r := maskTransformOutput b64cred template response
   let r := maskCredentials cred uri r
   maskPercentEncoded cred uri b64cred template r
+
+-- maskPercentEncoded_buggy models the OLD (pre-1.0.1) proxy.go: when the
+-- all-or-nothing queryUnescape fails, it BAILS and returns the body UNMASKED.
+-- This is the branch the earlier proof did not model, so it could not detect
+-- the leak. Keeping it lets us prove the bug exists (buggy_leaks_stray_pct).
+def maskPercentEncoded_buggy (cred uri b64cred template body : Str) : Str :=
+  if body.contains '%' then
+    match queryUnescape body with
+    | none         => body  -- BUG: a single bad '%' disables masking entirely
+    | some decoded =>
+      if decoded = body then body
+      else
+        let masked := maskCredentials cred uri (maskTransformOutput b64cred template decoded)
+        if masked = decoded then body else masked
+  else body
+
+def pipeline_buggy (cred uri b64cred response : Str) : Str :=
+  let template := t "{{ base64(key-rest://" ++ uri ++ t ") }}"
+  let r := maskTransformOutput b64cred template response
+  let r := maskCredentials cred uri r
+  maskPercentEncoded_buggy cred uri b64cred template r
 
 -- ===========================================================================
 -- Part 1 — regression anchors (kernel-verified test vectors, `decide`)
@@ -466,9 +524,19 @@ private theorem maskCredentials_cred_free (cred uri X : Str)
 theorem masks_cred_universal (cred uri b64cred response : Str)
     (hne : cred ≠ []) (hdisj : Disj cred (t "key-rest://" ++ uri)) :
     isInfix cred (pipeline cred uri b64cred response) = false := by
+  have key : ∀ X, isInfix cred (maskCredentials cred uri X) = false :=
+    fun X => maskCredentials_cred_free cred uri X hne hdisj
   unfold pipeline maskPercentEncoded
   dsimp only
-  split <;> exact maskCredentials_cred_free cred uri _ hne hdisj
+  -- Every leaf is either the argument body (= maskCredentials cred uri _) or a
+  -- fresh maskCredentials cred uri _ — all cred-free by `key`.
+  split
+  · split
+    · exact key _
+    · split
+      · exact key _
+      · exact key _
+  · exact key _
 
 -- A concrete credential whose characters are disjoint from the template, so the
 -- universal theorem applies.  (Acceptance: NoReform/Disj instance via `decide`.)
@@ -477,6 +545,66 @@ example : Disj (t "ab~dq") (t "key-rest://u/k") := by decide
 -- which is why the universal proof uses a disjoint credential and "ab~de" stays
 -- a pointwise anchor.  This documents the sufficient-vs-necessary gap.
 example : ¬ Disj (t "ab~de") (t "key-rest://u/k") := by decide
+
+-- ===========================================================================
+-- Part 2c — the faithful model now DETECTS the percent-decode bypass (v1.0.1).
+--
+-- The earlier model used a tolerant, total decoder and OMITTED the "decode
+-- failed -> return unmasked" branch, so it could not see the bug. With
+-- queryUnescape (all-or-nothing) and maskPercentEncoded_buggy (bail on
+-- failure) modeled faithfully, the leak is now a provable fact, and the fix
+-- is verified against the same input.
+--
+-- Input: cred "ab~de" percent-encoded as "ab%7Ede", followed by a stray
+-- invalid "%g" (mimicking a literal '%' in an error body). queryUnescape
+-- fails on "%g", which in the old code disabled masking entirely.
+-- ===========================================================================
+
+/-- Faithful OLD model LEAKS: the credential is recoverable from the output
+    (after the agent percent-decodes it). `= true` is the leak. -/
+theorem buggy_leaks_stray_pct :
+    let cred := t "ab~de"
+    let uri  := t "u/k"
+    let resp := t "ab%7Ede%g"
+    isInfix cred (percentDecodeAll (pipeline_buggy cred uri (t "") resp)) = true := by
+  decide
+
+/-- FIXED model masks the same input: the stray '%' no longer disables masking. -/
+theorem fixed_masks_stray_pct :
+    let cred := t "ab~de"
+    let uri  := t "u/k"
+    let resp := t "ab%7Ede%g"
+    isInfix cred (percentDecodeAll (pipeline cred uri (t "") resp)) = false := by
+  decide
+
+/-- v1.0.2 fix: always using percentDecodeAll closes the '+'-as-space bypass.
+    '+' is now kept as '+', so "YWJ+ZGU%3D" decodes to "YWJ+ZGU=" which
+    matches b64cred and is masked. -/
+theorem fixed_masks_plus_b64 :
+    let cred    := t "ab~de"
+    let b64cred := t "YWJ+ZGU="
+    let uri     := t "u/k"
+    let resp    := t "YWJ+ZGU%3D"    -- '+' literal, '=' percent-encoded as %3D
+    isInfix b64cred (percentDecodeAll (pipeline cred uri b64cred resp)) = false := by
+  decide
+
+-- ===========================================================================
+-- Model fidelity notes (what this model does and does NOT mirror)
+--
+-- Now modeled faithfully (this is what made the bug provable):
+--   * queryUnescape: Go url.QueryUnescape's all-or-nothing failure AND '+'→space.
+--   * maskPercentEncoded / _buggy: the decode-failure branch (fix vs old bail).
+--
+-- Still simplified (documented, not yet modeled):
+--   * maskCredentials models ONE credential; proxy.go sorts MANY longest-first.
+--     That longest-first pass is why two overlapping keys can partially mask
+--     each other (observed in live testing).
+--   * maskTruncatedKeys (regex, OpenAI/Stripe/localhost only) is omitted; it is
+--     an EXTRA masker, so omitting it is conservative for these leak proofs.
+--   * Only the response BODY is modeled; proxy.go runs the same sequence on
+--     response HEADERS, so the guarantees transfer unchanged.
+--   * percentEncodeAll encodes by codepoint; Go encodes by byte (see Part 2a).
+-- ===========================================================================
 
 -- ===========================================================================
 -- Part 3 — limits that are NOT universally provable (documented, not proved)
@@ -515,3 +643,6 @@ example : ¬ Disj (t "ab~de") (t "key-rest://u/k") := by decide
 #print axioms masks_cred_universal
 #print axioms masks_raw
 #print axioms masks_pct_b64
+#print axioms buggy_leaks_stray_pct
+#print axioms fixed_masks_stray_pct
+#print axioms fixed_masks_plus_b64

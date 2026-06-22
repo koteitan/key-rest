@@ -577,15 +577,12 @@ func maskPercentEncoded(s string, snapshot []credSnapshot, outputs map[string]st
 	if !strings.Contains(s, "%") {
 		return s
 	}
-	decoded, err := url.QueryUnescape(s)
-	if err != nil {
-		// url.QueryUnescape is all-or-nothing: a single malformed '%' (very
-		// common in error/5xx bodies, e.g. "100% done" or a printf-style
-		// "%s") makes it fail. Previously this caused the function to return
-		// s unmasked, leaking any percent-encoded credential elsewhere in the
-		// body. Fall back to a tolerant decode so masking still runs.
-		decoded = tolerantPercentDecode(s)
-	}
+	// Always use the tolerant decoder (not url.QueryUnescape) so that a '+'
+	// in the body is left as '+' instead of being converted to a space.
+	// url.QueryUnescape's '+'-as-space behaviour caused base64 credentials
+	// containing '+' to be missed: "YWJ+ZGU%3D" decoded to "YWJ ZGU=" which
+	// no longer matched the known base64 form, so masking was skipped.
+	decoded := tolerantPercentDecode(s)
 	if decoded == s {
 		return s
 	}
@@ -602,9 +599,9 @@ func maskPercentEncoded(s string, snapshot []credSnapshot, outputs map[string]st
 
 // tolerantPercentDecode unescapes every valid %XX sequence to its byte value and
 // leaves any malformed '%' (one not followed by two hex digits) as a literal
-// '%'. Unlike url.QueryUnescape it never fails, so a single bad escape cannot
-// disable credential masking for the rest of the body. It does not treat '+'
-// as a space (only url.QueryUnescape does that, on the success path above).
+// '%'. Unlike url.QueryUnescape it never fails and never converts '+' to a
+// space, so a single bad escape cannot disable credential masking for the rest
+// of the body, and '+' in base64 values is preserved.
 func tolerantPercentDecode(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
