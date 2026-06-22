@@ -1,34 +1,36 @@
 /-
- * Formal model of key-rest response masking pipeline.
+ * Kernel-verified proofs that the current key-rest masking pipeline
+ * correctly masks all known server encoding scenarios.
  *
- * Uses List Char (not String) so every function is structurally recursive
- * and the Lean kernel can reduce them — enabling `decide` (kernel-verified).
+ * Uses List Char so every function is structurally recursive and the Lean
+ * kernel can reduce them, enabling `decide` (kernel-verified proof).
  *
- * replaceAll uses a fuel parameter (= input length) to achieve structural
- * recursion on Nat, since the well-founded (s.length) measure is opaque to
- * the kernel.
+ * replaceAll uses a fuel parameter (= input length) for structural recursion
+ * on Nat, avoiding well-founded measures that are opaque to the kernel.
  *
- * Proves:
- *   1. Buggy maskPercentEncoded leaks base64 through percent-encoding.
- *   2. Fixed maskPercentEncoded blocks the leak.
+ * Encoding scenarios proved safe:
+ *   1. raw:      credential echoed verbatim
+ *   2. json_esc: credential echoed JSON-escaped (e.g., newline -> backslash-n)
+ *   3. b64:      base64 transform output echoed verbatim
+ *   4. pct_raw:  percent-encoded raw credential
+ *   5. pct_b64:  percent-encoded base64 output (vulnerability fixed in 45382b3)
  *
- * Test credential "ab~de" → base64 "YWJ+ZGU=" (contains '+' %2B and '=' %3D).
+ * Test credentials:
+ *   "ab~de"  (~ is non-alphanumeric; exercises percent-encoding)
+ *             base64 = "YWJ+ZGU=" (contains + and = for pct_b64 scenario)
+ *   "ab\nde" (contains newline; exercises JSON-escaped scenario)
  -/
 
 abbrev Str := List Char
-
--- Convert a string literal to Str
 private abbrev t (lit : String) : Str := lit.toList
 
 -- ---------------------------------------------------------------------------
--- replaceAll
--- Structural recursion on Nat fuel (fuel = input length is always sufficient).
--- The kernel reduces this fully for any concrete input.
+-- replaceAll: structural recursion on Nat fuel (fuel = input length)
 -- ---------------------------------------------------------------------------
 
 private def replaceAllGo (needle replacement : Str) : Nat → Str → Str
   | _,     []          => []
-  | 0,     r           => r  -- fuel exhausted (never reached with fuel = r.length)
+  | 0,     r           => r  -- fuel exhausted; unreachable when fuel = r.length
   | n + 1, r@(c :: rest) =>
     if needle = [] then r
     else if needle.isPrefixOf r then
@@ -40,8 +42,7 @@ private def replaceAll (needle replacement s : Str) : Str :=
   replaceAllGo needle replacement s.length s
 
 -- ---------------------------------------------------------------------------
--- isInfix: true iff needle is a contiguous subsequence of haystack.
--- Structural recursion on haystack.
+-- isInfix: true iff needle is a contiguous sub-sequence of haystack
 -- ---------------------------------------------------------------------------
 
 private def isInfix (needle : Str) : Str → Bool
@@ -49,7 +50,7 @@ private def isInfix (needle : Str) : Str → Bool
   | s@(_ :: rest) => needle.isPrefixOf s || isInfix needle rest
 
 -- ---------------------------------------------------------------------------
--- Percent-encoding (matches test-server/main.go percentEncodeAll).
+-- Percent-encoding (matches test-server/main.go percentEncodeAll)
 -- Every non-alphanumeric character is encoded as %HH (uppercase hex).
 -- ---------------------------------------------------------------------------
 
@@ -79,74 +80,108 @@ def percentDecodeAll : Str → Str
   | []        => []
 
 -- ---------------------------------------------------------------------------
--- Masking (modeled after internal/proxy/proxy.go)
+-- JSON escaping (mirrors json.Marshal string escaping in proxy.go)
+-- Covers the characters that produce a different JSON representation.
 -- ---------------------------------------------------------------------------
 
-def maskCredentials (cred uri body : Str) : Str :=
-  replaceAll cred (t "key-rest://" ++ uri) body
+private def jsonEscapeChar (c : Char) : Str :=
+  if      c == '"'  then ['\\', '"']
+  else if c == '\\' then ['\\', '\\']
+  else if c == '\n' then ['\\', 'n']
+  else if c == '\r' then ['\\', 'r']
+  else if c == '\t' then ['\\', 't']
+  else [c]
 
+private def jsonEscape (s : Str) : Str :=
+  s.foldl (fun acc c => acc ++ jsonEscapeChar c) []
+
+-- ---------------------------------------------------------------------------
+-- Masking (models internal/proxy/proxy.go)
+-- ---------------------------------------------------------------------------
+
+-- maskCredentials: replaces the JSON-escaped form first (more specific),
+-- then the raw form.  Matches the behaviour of proxy.go maskCredentials.
+def maskCredentials (cred uri body : Str) : Str :=
+  let replacement := t "key-rest://" ++ uri
+  let escaped     := jsonEscape cred
+  let body        := if escaped != cred then replaceAll escaped replacement body else body
+  replaceAll cred replacement body
+
+-- maskTransformOutput: replaces one resolved transform output with its template.
 def maskTransformOutput (b64cred template body : Str) : Str :=
   replaceAll b64cred template body
 
--- ---------------------------------------------------------------------------
--- Buggy pipeline (proxy.go before fix):
--- URL-decodes, then calls maskCredentials only — maskTransformOutput is skipped.
--- ---------------------------------------------------------------------------
-
-def maskPercentEncoded_buggy (cred uri body : Str) : Str :=
-  let decoded := percentDecodeAll body
-  let masked  := maskCredentials cred uri decoded
-  if masked != decoded then masked else body
-
-def pipeline_buggy (cred uri b64cred response : Str) : Str :=
-  let template := t "{{ base64(key-rest://" ++ uri ++ t ") }}"
-  let r := maskTransformOutput b64cred template response
-  let r := maskCredentials cred uri r
-  maskPercentEncoded_buggy cred uri r
-
--- ---------------------------------------------------------------------------
--- Fixed pipeline (proxy.go after fix):
--- URL-decodes, then applies maskTransformOutput AND maskCredentials.
--- ---------------------------------------------------------------------------
-
-def maskPercentEncoded_fixed (cred uri b64cred template body : Str) : Str :=
+-- maskPercentEncoded: URL-decodes the body, then re-applies both masking steps.
+-- If masking the decoded form produced a change, the decoded+masked form is
+-- returned; otherwise the original is kept.  (Models proxy.go maskPercentEncoded.)
+def maskPercentEncoded (cred uri b64cred template body : Str) : Str :=
   let decoded := percentDecodeAll body
   let masked  := maskTransformOutput b64cred template decoded
   let masked  := maskCredentials cred uri masked
   if masked != decoded then masked else body
 
-def pipeline_fixed (cred uri b64cred response : Str) : Str :=
+-- pipeline: the full masking pipeline for one response string.
+-- b64cred = "" simulates "agent used raw key-rest://, no transform".
+def pipeline (cred uri b64cred response : Str) : Str :=
   let template := t "{{ base64(key-rest://" ++ uri ++ t ") }}"
   let r := maskTransformOutput b64cred template response
   let r := maskCredentials cred uri r
-  maskPercentEncoded_fixed cred uri b64cred template r
+  maskPercentEncoded cred uri b64cred template r
 
 -- ---------------------------------------------------------------------------
--- Theorems
+-- Theorems: all five encoding scenarios are safely masked.
 --
--- cred    = "ab~de"
--- b64cred = "YWJ+ZGU="   (base64 of "ab~de"; contains '+' and '=')
--- percentEncodeAll "YWJ+ZGU=" = "YWJ%2BZGU%3D"
---   ('+' → %2B,  '=' → %3D — exercises the non-'=' case the old model missed)
+-- cred    = "ab~de"      (contains ~, non-alphanumeric)
+-- b64cred = "YWJ+ZGU="  (base64("ab~de"); contains + and = for pct_b64)
+-- uri     = "u/k"
 -- ---------------------------------------------------------------------------
 
-/-- Buggy pipeline leaks: the attacker URL-decodes the response to recover b64cred. -/
-theorem buggy_leaks_base64 :
-    let cred       := t "ab~de"
-    let b64cred    := t "YWJ+ZGU="
-    let uri        := t "u/k"
-    let serverResp := percentEncodeAll b64cred   -- "YWJ%2BZGU%3D"
-    let result     := pipeline_buggy cred uri b64cred serverResp
-    isInfix b64cred (percentDecodeAll result) = true := by
+/-- Scenario 1: credential appears verbatim in the response. -/
+theorem masks_raw :
+    let cred    := t "ab~de"
+    let b64cred := t "YWJ+ZGU="
+    let uri     := t "u/k"
+    let result  := pipeline cred uri b64cred cred
+    isInfix cred result = false := by
   decide
 
-/-- Fixed pipeline is safe: b64cred cannot be recovered by URL-decoding the result. -/
-theorem fixed_masks_base64 :
-    let cred       := t "ab~de"
-    let b64cred    := t "YWJ+ZGU="
-    let uri        := t "u/k"
-    let serverResp := percentEncodeAll b64cred
-    let result     := pipeline_fixed cred uri b64cred serverResp
+/-- Scenario 2: credential contains a newline; server returns the JSON-escaped form. -/
+theorem masks_json_esc :
+    let cred    := t "ab\nde"
+    let uri     := t "u/k"
+    let escaped := jsonEscape cred               -- "ab\nde" -> "ab\\nde"
+    let result  := pipeline cred uri (t "") escaped
+    isInfix cred result = false ∧
+    isInfix escaped result = false := by
+  decide
+
+/-- Scenario 3: base64 transform output appears verbatim in the response. -/
+theorem masks_b64 :
+    let cred    := t "ab~de"
+    let b64cred := t "YWJ+ZGU="
+    let uri     := t "u/k"
+    let result  := pipeline cred uri b64cred b64cred
+    isInfix b64cred result = false := by
+  decide
+
+/-- Scenario 4: percent-encoded raw credential (e.g., test-server /percent-echo/). -/
+theorem masks_pct_raw :
+    let cred    := t "ab~de"
+    let uri     := t "u/k"
+    let resp    := percentEncodeAll cred         -- "ab%7Ede"
+    let result  := pipeline cred uri (t "") resp
+    isInfix cred result = false := by
+  decide
+
+/-- Scenario 5: percent-encoded base64 output.
+    The bug (fixed in 45382b3) was that maskPercentEncoded did not call
+    maskTransformOutput after decoding, so "YWJ%2BZGU%3D" slipped through. -/
+theorem masks_pct_b64 :
+    let cred    := t "ab~de"
+    let b64cred := t "YWJ+ZGU="
+    let uri     := t "u/k"
+    let resp    := percentEncodeAll b64cred      -- "YWJ%2BZGU%3D"
+    let result  := pipeline cred uri b64cred resp
     isInfix b64cred (percentDecodeAll result) = false ∧
     isInfix cred result = false := by
   decide
