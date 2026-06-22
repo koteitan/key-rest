@@ -258,7 +258,7 @@ func (p *Proxy) Handle(req *Request) *Response {
 	respBodyStr := p.maskTransformOutputs(string(respBody), transformOutputs)
 	respBodyStr = maskCredentials(respBodyStr, snapshot)
 	respBodyStr = maskTruncatedKeys(respBodyStr, snapshot)
-	respBodyStr = maskPercentEncoded(respBodyStr, snapshot)
+	respBodyStr = maskPercentEncoded(respBodyStr, snapshot, transformOutputs)
 
 	// Build response headers (with credential masking)
 	respHeaders := make(map[string]string)
@@ -266,7 +266,7 @@ func (p *Proxy) Handle(req *Request) *Response {
 		v := p.maskTransformOutputs(resp.Header.Get(k), transformOutputs)
 		v = maskCredentials(v, snapshot)
 		v = maskTruncatedKeys(v, snapshot)
-		respHeaders[k] = maskPercentEncoded(v, snapshot)
+		respHeaders[k] = maskPercentEncoded(v, snapshot, transformOutputs)
 	}
 
 	return &Response{
@@ -572,7 +572,8 @@ func maskTruncatedKeys(s string, snapshot []credSnapshot) string {
 // If the response contains '%', it URL-decodes the body and retries masking.
 // If masking finds credentials in the decoded form, the decoded+masked version
 // is returned; otherwise the original is kept unchanged.
-func maskPercentEncoded(s string, snapshot []credSnapshot) string {
+// outputs is the transform-output map from collectTransformOutputs; passing nil skips transform masking.
+func maskPercentEncoded(s string, snapshot []credSnapshot, outputs map[string]string) string {
 	if !strings.Contains(s, "%") {
 		return s
 	}
@@ -580,7 +581,11 @@ func maskPercentEncoded(s string, snapshot []credSnapshot) string {
 	if err != nil || decoded == s {
 		return s
 	}
-	masked := maskCredentials(decoded, snapshot)
+	masked := decoded
+	for resolved, original := range outputs {
+		masked = strings.ReplaceAll(masked, resolved, original)
+	}
+	masked = maskCredentials(masked, snapshot)
 	if masked != decoded {
 		return masked
 	}

@@ -197,7 +197,7 @@ func TestDecompressBodyMalformed(t *testing.T) {
 }
 
 func TestMaskPercentEncodedNoPercent(t *testing.T) {
-	if got := maskPercentEncoded("plain", nil); got != "plain" {
+	if got := maskPercentEncoded("plain", nil, nil); got != "plain" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -207,7 +207,7 @@ func TestMaskPercentEncodedDecodesAndMasks(t *testing.T) {
 		{uri: "user1/k", value: []byte("SECRET")},
 	}
 	encoded := "Bearer%20SECRET"
-	got := maskPercentEncoded(encoded, snap)
+	got := maskPercentEncoded(encoded, snap, nil)
 	if !strings.Contains(got, "key-rest://user1/k") {
 		t.Fatalf("expected URI in masked string, got %q", got)
 	}
@@ -215,15 +215,34 @@ func TestMaskPercentEncodedDecodesAndMasks(t *testing.T) {
 
 func TestMaskPercentEncodedInvalidEscape(t *testing.T) {
 	// %XY where XY isn't hex — QueryUnescape returns an error.
-	if got := maskPercentEncoded("%ZZ", nil); got != "%ZZ" {
+	if got := maskPercentEncoded("%ZZ", nil, nil); got != "%ZZ" {
 		t.Fatalf("expected unchanged, got %q", got)
 	}
 }
 
 func TestMaskPercentEncodedNoCredentialAfterDecode(t *testing.T) {
 	// Has a percent escape, decodes fine, but no credential → return original.
-	if got := maskPercentEncoded("%20%20", nil); got != "%20%20" {
+	if got := maskPercentEncoded("%20%20", nil, nil); got != "%20%20" {
 		t.Fatalf("expected unchanged, got %q", got)
+	}
+}
+
+// TestMaskPercentEncodedBase64Transform verifies that a base64-encoded credential
+// that was percent-encoded by the server is masked when outputs map is supplied.
+// Regression test for the base64+percent-encoding exfiltration bypass.
+func TestMaskPercentEncodedBase64Transform(t *testing.T) {
+	import64 := "bXlteWNyZWRlbnRpYWw=" // base64("mymycredential")
+	// server percent-encodes the '=' padding: bXlteWNyZWRlbnRpYWw%3D
+	encoded := "bXlteWNyZWRlbnRpYWw%3D"
+	outputs := map[string]string{
+		import64: "{{ base64(key-rest://t/percent-echo/key) }}",
+	}
+	got := maskPercentEncoded(encoded, nil, outputs)
+	if strings.Contains(got, "bXlteWNyZWRlbnRpYWw") {
+		t.Fatalf("base64 transform output leaked through percent-encoding: %q", got)
+	}
+	if !strings.Contains(got, "key-rest://") {
+		t.Fatalf("expected masked URI in output, got %q", got)
 	}
 }
 
