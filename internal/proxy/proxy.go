@@ -578,7 +578,15 @@ func maskPercentEncoded(s string, snapshot []credSnapshot, outputs map[string]st
 		return s
 	}
 	decoded, err := url.QueryUnescape(s)
-	if err != nil || decoded == s {
+	if err != nil {
+		// url.QueryUnescape is all-or-nothing: a single malformed '%' (very
+		// common in error/5xx bodies, e.g. "100% done" or a printf-style
+		// "%s") makes it fail. Previously this caused the function to return
+		// s unmasked, leaking any percent-encoded credential elsewhere in the
+		// body. Fall back to a tolerant decode so masking still runs.
+		decoded = tolerantPercentDecode(s)
+	}
+	if decoded == s {
 		return s
 	}
 	masked := decoded
@@ -590,6 +598,42 @@ func maskPercentEncoded(s string, snapshot []credSnapshot, outputs map[string]st
 		return masked
 	}
 	return s
+}
+
+// tolerantPercentDecode unescapes every valid %XX sequence to its byte value and
+// leaves any malformed '%' (one not followed by two hex digits) as a literal
+// '%'. Unlike url.QueryUnescape it never fails, so a single bad escape cannot
+// disable credential masking for the rest of the body. It does not treat '+'
+// as a space (only url.QueryUnescape does that, on the success path above).
+func tolerantPercentDecode(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '%' && i+2 < len(s) {
+			if hi := unhexDigit(s[i+1]); hi >= 0 {
+				if lo := unhexDigit(s[i+2]); lo >= 0 {
+					b.WriteByte(byte(hi<<4 | lo))
+					i += 2
+					continue
+				}
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// unhexDigit returns the value 0-15 of a hex-digit byte, or -1 if not hex.
+func unhexDigit(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c - 'a' + 10)
+	case c >= 'A' && c <= 'F':
+		return int(c - 'A' + 10)
+	}
+	return -1
 }
 
 // collectTransformOutputs resolves all transform expressions (e.g., base64)
